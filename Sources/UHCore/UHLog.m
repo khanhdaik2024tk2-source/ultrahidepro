@@ -14,7 +14,9 @@ static os_log_t UHLogHandle(void) {
 	return handle;
 }
 
-@implementation UHLog
+@implementation UHLog {
+	UHLogLevel _level;
+}
 
 + (instancetype)sharedInstance {
 	static UHLog *s;
@@ -54,13 +56,13 @@ static os_log_t UHLogHandle(void) {
 	NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:args];
 	if (msg == nil) msg = @"<nil>";
 
-	const char *prefix;
+	NSString *prefix;
 	switch (level) {
-		case UHLogLevelDebug: prefix = "[UHDBG] "; break;
-		case UHLogLevelInfo:  prefix = "[UHINF] "; break;
-		case UHLogLevelWarn:  prefix = "[UHWRN] "; break;
-		case UHLogLevelError: prefix = "[UHERR] "; break;
-		default:              prefix = "[UH???] "; break;
+		case UHLogLevelDebug: prefix = @"[UHDBG] "; break;
+		case UHLogLevelInfo:  prefix = @"[UHINF] "; break;
+		case UHLogLevelWarn:  prefix = @"[UHWRN] "; break;
+		case UHLogLevelError: prefix = @"[UHERR] "; break;
+		default:              prefix = @"[UH???] "; break;
 	}
 
 	NSString *line = [prefix stringByAppendingString:msg];

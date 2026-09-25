@@ -95,7 +95,7 @@ static void UHLocateTextSegment(const struct mach_header *hdr, uintptr_t slide,
 	// tweak wasn't injected by dopamine.
 	UHLogWarnF(@"UHMachO: own path not found via _dyld_image_count; falling back to dladdr");
 	Dl_info info;
-	if (dladdr((const void *)+[UHMachO bootstrap], &info) != 0 &&
+	if (dladdr((const void *)&UHLocateTextSegment, &info) != 0 &&
 	    info.dli_fname != NULL && info.dli_fbase != NULL) {
 		gOwnPath = [NSString stringWithUTF8String:info.dli_fname];
 		gOwnLoadAddr = (uintptr_t)info.dli_fbase;
