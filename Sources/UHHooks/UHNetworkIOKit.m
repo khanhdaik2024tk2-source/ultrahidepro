@@ -115,34 +115,8 @@ static CFTypeRef $MGCopyAnswerWithError(CFStringRef key, int *errorCode) {
 #pragma mark - Installer
 
 void UHInstallNetworkIOKitHooks(void) {
-	UHHookStats *stats = [UHHookStats sharedInstance];
-	NSUInteger before = stats.activeCount;
-
-	MSHookFunction((void *)getifaddrs, (void *)$getifaddrs, (void **)&_orig_getifaddrs);
-	[stats bumpBy:1];
-
-	void *svcOpen = dlsym(RTLD_DEFAULT, "io_service_open_extended");
-	if (svcOpen != NULL) {
-		MSHookFunction(svcOpen, (void *)$io_service_open_extended,
-			(void **)&_orig_io_service_open_extended);
-		[stats bumpBy:1];
-	}
-
-	void *mg = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_LAZY);
-	if (mg != NULL) {
-		void *mg1 = dlsym(mg, "MGCopyAnswer");
-		if (mg1 != NULL) {
-			MSHookFunction(mg1, (void *)$MGCopyAnswer, (void **)&_orig_MGCopyAnswer);
-			[stats bumpBy:1];
-		}
-		void *mg2 = dlsym(mg, "MGCopyAnswerWithError");
-		if (mg2 != NULL) {
-			MSHookFunction(mg2, (void *)$MGCopyAnswerWithError,
-				(void **)&_orig_MGCopyAnswerWithError);
-			[stats bumpBy:1];
-		}
-	}
-
-	UHLogInfoF(@"network/IOKit hooks installed (%lu total)",
-		(unsigned long)(stats.activeCount - before));
+	// Intentionally do not hook getifaddrs or MGCopyAnswer:
+	// 1. Darwin getifaddrs uses a single contiguous malloc buffer; modifying the list head causes freeifaddrs to crash with SIGABRT (malloc error).
+	// 2. MGCopyAnswer in libMobileGestalt is heavily called by UIKit/CoreTelephony on startup; returning NULL for hardware keys causes immediate unhandled exceptions.
+	UHLogInfoF(@"network/IOKit layer initialized (safe mode)");
 }

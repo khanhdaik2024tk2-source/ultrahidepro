@@ -132,47 +132,11 @@ void UHInstallSandboxAMFIHooks(void) {
 		[stats bumpBy:1];
 	}
 
-	void *sec_csi = dlsym(RTLD_DEFAULT, "SecCodeCopySigningInformation");
-	if (sec_csi != NULL) {
-		MSHookFunction(sec_csi,
-			(void *)$SecCodeCopySigningInformation,
-			(void **)&_orig_SecCodeCopySigningInformation);
-		[stats bumpBy:1];
-	}
-
 	void *sec_ccv = dlsym(RTLD_DEFAULT, "SecCodeCheckValidity");
 	if (sec_ccv != NULL) {
 		MSHookFunction(sec_ccv,
 			(void *)$SecCodeCheckValidity,
 			(void **)&_orig_SecCodeCheckValidity);
-		[stats bumpBy:1];
-	}
-
-	void *sec_tve = dlsym(RTLD_DEFAULT, "SecTaskCopyValueForEntitlement");
-	if (sec_tve != NULL) {
-		MSHookFunction(sec_tve,
-			(void *)$SecTaskCopyValueForEntitlement,
-			(void **)&_orig_SecTaskCopyValueForEntitlement);
-		[stats bumpBy:1];
-	}
-
-	void *mis1 = dlsym(RTLD_DEFAULT, "MISValidateSignature");
-	if (mis1 != NULL) {
-		MSHookFunction(mis1, (void *)$MISValidateSignature, (void **)&_orig_MISValidateSignature);
-		[stats bumpBy:1];
-	}
-	void *mis2 = dlsym(RTLD_DEFAULT, "MISValidateSignatureAndCopyInfo");
-	if (mis2 != NULL) {
-		MSHookFunction(mis2, (void *)$MISValidateSignatureAndCopyInfo,
-			(void **)&_orig_MISValidateSignatureAndCopyInfo);
-		[stats bumpBy:1];
-	}
-
-	void *xcc = dlsym(RTLD_DEFAULT, "xpc_connection_create");
-	if (xcc != NULL) {
-		MSHookFunction(xcc,
-			(void *)$xpc_connection_create,
-			(void **)&_orig_xpc_connection_create);
 		[stats bumpBy:1];
 	}
 

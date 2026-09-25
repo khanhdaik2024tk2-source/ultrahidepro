@@ -129,34 +129,10 @@ static kern_return_t $vm_region_recurse_64(vm_map_t target_task,
 // we CAN mask the two other commonly used entry points: header and
 // slide. Together with the existing _dyld_image_count / _dyld_get_image_name
 // hooks they cover the three axes detection libraries use.
-typedef const struct mach_header *(*dyld_get_image_header_t)(uint32_t);
-static dyld_get_image_header_t _orig_dyld_get_image_header = NULL;
-
-static const struct mach_header *$dyld_get_image_header(uint32_t index) {
-	const struct mach_header *hdr = _orig_dyld_get_image_header(index);
-	if (hdr == NULL) return NULL;
-	if (hdr == (const struct mach_header *)[UHMachO ownLoadAddress] || UHDyldIsTweakImage(index)) {
-		// Never return NULL; callers dereference hdr->magic which causes SIGSEGV.
-		// Return the main executable header (index 0) as a safe fallback.
-		return _orig_dyld_get_image_header(0);
-	}
-	return hdr;
-}
-
 #pragma mark - Installer
 
 void UHInstallAntiHookHooks(void) {
-	UHHookStats *stats = [UHHookStats sharedInstance];
-	NSUInteger before = stats.activeCount;
-
-	void *hdr_fn = dlsym(RTLD_DEFAULT, "_dyld_get_image_header");
-	if (hdr_fn != NULL) {
-		MSHookFunction(hdr_fn,
-			(void *)$dyld_get_image_header,
-			(void **)&_orig_dyld_get_image_header);
-		[stats bumpBy:1];
-	}
-
-	UHLogInfoF(@"anti-anti-hook layer installed (%lu total)",
-		(unsigned long)(stats.activeCount - before));
+	// Intentionally do not hook _dyld_get_image_header: libobjc calls this during early
+	// image mapping; altering return headers causes libobjc duplicate class aborts and dyld crashes.
+	UHLogInfoF(@"anti-anti-hook layer initialized (safe mode)");
 }

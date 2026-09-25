@@ -293,31 +293,6 @@ static DIR *$opendir(const char *path) {
 typedef struct dirent *(*readdir_t)(DIR *);
 static readdir_t _orig_readdir = NULL;
 
-typedef struct {
-	DIR *key;
-	const char *parent;
-} UHReadDirEntry;
-
-#define UH_READDIR_BUCKETS 16
-#define UH_READDIR_MAX_ITER 4096
-static UHReadDirEntry gReadDirCache[UH_READDIR_BUCKETS];
-
-static const char *UHReadDirRememberParent(DIR *dirp) {
-	if (dirp == NULL) return NULL;
-	uintptr_t idx = ((uintptr_t)dirp >> 4) % UH_READDIR_BUCKETS;
-	UHReadDirEntry *e = &gReadDirCache[idx];
-	if (e->key == dirp && e->parent != NULL) return e->parent;
-
-	int fd = dirfd(dirp);
-	char path[PATH_MAX] = {0};
-	if (fd >= 0) {
-		if (fcntl(fd, F_GETPATH, path) != 0) return NULL;
-	}
-	e->key = dirp;
-	e->parent = strdup(path);
-	return e->parent;
-}
-
 static bool UHReadDirIsParentBlacklisted(const char *parent) {
 	if (parent == NULL || parent[0] == '\0') return false;
 	if (strcmp(parent, "/var") == 0) return true;
@@ -334,8 +309,15 @@ static bool UHReadDirIsParentBlacklisted(const char *parent) {
 	return false;
 }
 
+#define UH_READDIR_MAX_ITER 4096
+
 static struct dirent *$readdir(DIR *dirp) {
-	const char *parent = UHReadDirRememberParent(dirp);
+	if (dirp == NULL) return NULL;
+	int fd = dirfd(dirp);
+	char parent[PATH_MAX] = {0};
+	if (fd < 0 || fcntl(fd, F_GETPATH, parent) != 0) {
+		return _orig_readdir(dirp);
+	}
 	if (!UHReadDirIsParentBlacklisted(parent)) {
 		return _orig_readdir(dirp);
 	}
@@ -348,18 +330,17 @@ static struct dirent *$readdir(DIR *dirp) {
 				return e;
 			}
 		}
-		if (parent != NULL) {
-			if ((strcmp(parent, "/var") == 0 || strcmp(parent, "/private/var") == 0) &&
-			    strcmp(e->d_name, "jb") == 0) {
-				continue;
-			}
-			if (strstr(parent, "/private/preboot") != NULL &&
-			    (strstr(e->d_name, "dopamine") != NULL || strstr(e->d_name, "jb") != NULL)) {
-				continue;
-			}
+		if ((strcmp(parent, "/var") == 0 || strcmp(parent, "/private/var") == 0) &&
+		    strcmp(e->d_name, "jb") == 0) {
+			continue;
 		}
-		NSString *full = [NSString stringWithFormat:@"%s/%s", parent ?: "", e->d_name];
-		if (![UHConfig shouldBlockPath:full]) {
+		if (strstr(parent, "/private/preboot") != NULL &&
+		    (strstr(e->d_name, "dopamine") != NULL || strstr(e->d_name, "jb") != NULL)) {
+			continue;
+		}
+		char full[PATH_MAX];
+		snprintf(full, sizeof(full), "%s/%s", parent, e->d_name);
+		if (![UHConfig shouldBlockPath:[NSString stringWithUTF8String:full]]) {
 			return e;
 		}
 	}
@@ -433,20 +414,6 @@ void UHInstallFileSystemHooks(void) {
 	MSHookFunction((void *)opendir,    (void *)$opendir,    (void **)&_orig_opendir);
 	MSHookFunction((void *)readdir,    (void *)$readdir,    (void **)&_orig_readdir);
 	[stats bumpBy:14];
-
-	// INODE64 / 64-bit stat variants
-	void *fn_stat64 = dlsym(RTLD_DEFAULT, "stat64");
-	if (fn_stat64 != NULL && fn_stat64 != (void *)stat) {
-		stat_t _orig_s64 = NULL;
-		MSHookFunction(fn_stat64, (void *)$stat, (void **)&_orig_s64);
-		[stats bumpBy:1];
-	}
-	void *fn_lstat64 = dlsym(RTLD_DEFAULT, "lstat64");
-	if (fn_lstat64 != NULL && fn_lstat64 != (void *)lstat) {
-		lstat_t _orig_ls64 = NULL;
-		MSHookFunction(fn_lstat64, (void *)$lstat, (void **)&_orig_ls64);
-		[stats bumpBy:1];
-	}
 
 	Class bundleCls = NSClassFromString(@"NSBundle");
 	if (bundleCls != NULL) {

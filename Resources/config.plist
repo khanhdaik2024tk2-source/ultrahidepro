@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>version</key>
-	<string>1.1.4</string>
+	<string>1.1.5</string>
 
 	<!-- Bundle IDs that get full bypass. If empty -> bypass every process. -->
 	<key>target_apps</key>
@@ -29,7 +29,7 @@
 		<key>dyld</key><true/>
 		<key>environment</key><true/>
 		<key>sandbox_amfi</key><true/>
-		<key>network_iokit</key><true/>
+		<key>network_iokit</key><false/>
 		<key>objc_aggregate</key><false/>
 		<key>kernel</key><false/>
 	</dict>
@@ -199,10 +199,8 @@
 	<key>blacklist_mg_keys</key>
 	<array>
 		<string>Jailbroken</string>
-		<string>ChipID</string>
 		<string>TrustCacheValidation</string>
 		<string>SigningFuse</string>
-		<string>HasBaseband</string>
 	</array>
 </dict>
 </plist>

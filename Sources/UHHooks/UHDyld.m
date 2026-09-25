@@ -13,49 +13,6 @@
 #import <dlfcn.h>
 #import <string.h>
 
-#pragma mark - _dyld_image_count
-
-typedef uint32_t (*dyld_image_count_t)(void);
-static dyld_image_count_t _orig_dyld_image_count = NULL;
-
-static uint32_t gHiddenImageDelta = 0;
-
-void UHDyldSetHiddenImageDelta(uint32_t delta) { gHiddenImageDelta = delta; }
-
-static uint32_t $dyld_image_count(void) {
-	uint32_t n = _orig_dyld_image_count();
-	if (UH_UNLIKELY(gHiddenImageDelta > 0 && n >= gHiddenImageDelta)) {
-		return n - gHiddenImageDelta;
-	}
-	return n;
-}
-
-#pragma mark - _dyld_get_image_name
-
-typedef const char *(*dyld_get_image_name_t)(uint32_t);
-static dyld_get_image_name_t _orig_dyld_get_image_name = NULL;
-
-static const char *gDisguisedNamePtr = NULL;
-
-static const char *$dyld_get_image_name(uint32_t index) {
-	const char *orig = _orig_dyld_get_image_name(index);
-	if (orig == NULL) return NULL;
-	if (UH_UNLIKELY([UHMachO isTweakPath:orig])) {
-		if (gDisguisedNamePtr == NULL) {
-			gDisguisedNamePtr = strdup([[UHMachO disguisePath] UTF8String]);
-		}
-		return gDisguisedNamePtr;
-	}
-	return orig;
-}
-
-BOOL UHDyldIsTweakImage(uint32_t index) {
-	if (_orig_dyld_get_image_name == NULL) return NO;
-	const char *name = _orig_dyld_get_image_name(index);
-	if (name == NULL) return NO;
-	return [UHMachO isTweakPath:name];
-}
-
 #pragma mark - dlopen / dlopen_from
 
 typedef void *(*dlopen_t)(const char *, int);
@@ -140,12 +97,6 @@ void UHInstallDyldHooks(void) {
 	UHHookStats *stats = [UHHookStats sharedInstance];
 	NSUInteger before = stats.activeCount;
 
-	MSHookFunction((void *)_dyld_image_count,
-	               (void *)$dyld_image_count,
-	               (void **)&_orig_dyld_image_count);
-	MSHookFunction((void *)_dyld_get_image_name,
-	               (void *)$dyld_get_image_name,
-	               (void **)&_orig_dyld_get_image_name);
 	MSHookFunction((void *)dlopen,
 	               (void *)$dlopen,
 	               (void **)&_orig_dlopen);
@@ -155,7 +106,7 @@ void UHInstallDyldHooks(void) {
 	MSHookFunction((void *)dladdr,
 	               (void *)$dladdr,
 	               (void **)&_orig_dladdr);
-	[stats bumpBy:5];
+	[stats bumpBy:3];
 
 	UHLogInfoF(@"dyld hooks installed (%lu total)",
 		(unsigned long)(stats.activeCount - before));
