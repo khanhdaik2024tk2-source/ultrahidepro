@@ -10,6 +10,7 @@
 #import <objc/message.h>
 #import <stdlib.h>
 #import <string.h>
+#import <dlfcn.h>
 
 #pragma mark - getenv
 
@@ -114,7 +115,13 @@ void UHInstallEnvironmentHooks(void) {
 
 	MSHookFunction((void *)getenv, (void *)$getenv, (void **)&_orig_getenv);
 	MSHookFunction((void *)setenv, (void *)$setenv, (void **)&_orig_setenv);
-	MSHookFunction((void *)secure_getenv, (void *)$secure_getenv, (void **)&_orig_secure_getenv);
+	[stats bumpBy:2];
+
+	void *sec_getenv = dlsym(RTLD_DEFAULT, "secure_getenv");
+	if (sec_getenv != NULL) {
+		MSHookFunction(sec_getenv, (void *)$secure_getenv, (void **)&_orig_secure_getenv);
+		[stats bumpBy:1];
+	}
 	// __system_property_get is exported from libsystem_c.dylib.
 	void *spg = dlsym(RTLD_DEFAULT, "__system_property_get");
 	if (spg != NULL) {
@@ -142,7 +149,6 @@ void UHInstallEnvironmentHooks(void) {
 		[stats bumpBy:1];
 	}
 
-	[stats bumpBy:3]; // getenv + setenv + secure_getenv
 	UHLogInfoF(@"environment hooks installed (%lu total)",
 		(unsigned long)(stats.activeCount - before));
 }

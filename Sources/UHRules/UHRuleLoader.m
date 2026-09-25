@@ -57,9 +57,15 @@
 - (void)reloadFromDisk {
 	NSString *path = [self resolveExistingPath];
 	_resolvedPath = path;
-	NSDictionary *json = [NSDictionary dictionaryWithContentsOfFile:path];
-	if (json == nil) {
-		UHLogWarnF(@"vectors.json missing or malformed at %@", path);
+	NSData *data = [NSData dataWithContentsOfFile:path];
+	if (data == nil) {
+		UHLogWarnF(@"vectors.json missing or unreadable at %@", path);
+		return;
+	}
+	NSError *err = nil;
+	NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&err];
+	if (json == nil || ![json isKindOfClass:[NSDictionary class]]) {
+		UHLogWarnF(@"vectors.json missing or malformed at %@: %@", path, err.localizedDescription);
 		return;
 	}
 	id vecs = json[@"vectors"];

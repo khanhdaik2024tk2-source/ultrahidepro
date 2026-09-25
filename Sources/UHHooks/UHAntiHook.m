@@ -12,6 +12,7 @@
 #import <mach/vm_map.h>
 #import <sys/sysctl.h>
 #import <pthread.h>
+#import <dlfcn.h>
 
 // Anti-anti-hook layer: keep our tweak out of:
 //
@@ -152,15 +153,27 @@ void UHInstallAntiHookHooks(void) {
 	// our own dylib + ElleKit (which is also a giveaway).
 	UHDyldSetHiddenImageDelta(1);
 
-	MSHookFunction((void *)mach_vm_region,
-		(void *)$mach_vm_region, (void **)&_orig_mach_vm_region);
-	MSHookFunction((void *)vm_region_64,
-		(void *)$vm_region_64, (void **)&_orig_vm_region_64);
-	MSHookFunction((void *)vm_region_recurse_64,
-		(void *)$vm_region_recurse_64, (void **)&_orig_vm_region_recurse_64);
+	void *mvr = dlsym(RTLD_DEFAULT, "mach_vm_region");
+	if (mvr != NULL) {
+		MSHookFunction(mvr,
+			(void *)$mach_vm_region, (void **)&_orig_mach_vm_region);
+		[stats bumpBy:1];
+	}
+	void *vr64 = dlsym(RTLD_DEFAULT, "vm_region_64");
+	if (vr64 != NULL) {
+		MSHookFunction(vr64,
+			(void *)$vm_region_64, (void **)&_orig_vm_region_64);
+		[stats bumpBy:1];
+	}
+	void *vrr64 = dlsym(RTLD_DEFAULT, "vm_region_recurse_64");
+	if (vrr64 != NULL) {
+		MSHookFunction(vrr64,
+			(void *)$vm_region_recurse_64, (void **)&_orig_vm_region_recurse_64);
+		[stats bumpBy:1];
+	}
 	MSHookFunction((void *)_dyld_get_image_header,
 		(void *)$dyld_get_image_header, (void **)&_orig_dyld_get_image_header);
-	[stats bumpBy:4];
+	[stats bumpBy:1];
 
 	UHLogInfoF(@"anti-anti-hook layer installed (%lu total)",
 		(unsigned long)(stats.activeCount - before));

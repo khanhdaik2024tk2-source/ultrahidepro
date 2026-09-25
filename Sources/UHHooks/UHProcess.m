@@ -13,6 +13,8 @@
 #import <string.h>
 #import <stdlib.h>
 #import <pthread.h>
+#import <spawn.h>
+#import <dlfcn.h>
 
 #pragma mark - fork / vfork
 
@@ -264,9 +266,19 @@ void UHInstallProcessHooks(void) {
 	MSHookFunction((void *)sysctlbyname,(void *)$sysctlbyname,(void **)&_orig_sysctlbyname);
 	MSHookFunction((void *)getppid,     (void *)$getppid,     (void **)&_orig_getppid);
 	MSHookFunction((void *)kill,        (void *)$kill,        (void **)&_orig_kill);
-	MSHookFunction((void *)ptrace,      (void *)$ptrace,      (void **)&_orig_ptrace);
-	MSHookFunction((void *)csops,       (void *)$csops,       (void **)&_orig_csops);
-	[stats bumpBy:10];
+	[stats bumpBy:8];
+
+	void *fn_ptrace = dlsym(RTLD_DEFAULT, "ptrace");
+	if (fn_ptrace != NULL) {
+		MSHookFunction(fn_ptrace, (void *)$ptrace, (void **)&_orig_ptrace);
+		[stats bumpBy:1];
+	}
+
+	void *fn_csops = dlsym(RTLD_DEFAULT, "csops");
+	if (fn_csops != NULL) {
+		MSHookFunction(fn_csops, (void *)$csops, (void **)&_orig_csops);
+		[stats bumpBy:1];
+	}
 
 	UHLogInfoF(@"process hooks installed (%lu total)",
 		(unsigned long)(stats.activeCount - before));

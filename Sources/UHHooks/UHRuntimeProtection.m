@@ -11,6 +11,7 @@
 #import <mach/vm_map.h>
 #import <stdint.h>
 #import <string.h>
+#import <dlfcn.h>
 
 // UHRuntimeProtection.m — sanitize outbound vm_read buffers.
 //
@@ -98,13 +99,20 @@ void UHInstallRuntimeProtectionHooks(void) {
 	UHHookStats *stats = [UHHookStats sharedInstance];
 	NSUInteger before = stats.activeCount;
 
-	MSHookFunction((void *)vm_read_overwrite,
-		(void *)$vm_read_overwrite,
-		(void **)&_orig_vm_read_overwrite);
-	MSHookFunction((void *)vm_read,
-		(void *)$vm_read,
-		(void **)&_orig_vm_read);
-	[stats bumpBy:2];
+	void *vro = dlsym(RTLD_DEFAULT, "vm_read_overwrite");
+	if (vro != NULL) {
+		MSHookFunction(vro,
+			(void *)$vm_read_overwrite,
+			(void **)&_orig_vm_read_overwrite);
+		[stats bumpBy:1];
+	}
+	void *vr = dlsym(RTLD_DEFAULT, "vm_read");
+	if (vr != NULL) {
+		MSHookFunction(vr,
+			(void *)$vm_read,
+			(void **)&_orig_vm_read);
+		[stats bumpBy:1];
+	}
 
 	// PAC spoof is intentionally a no-op on arm64 (Dopamine 3.0.9 only
 	// ships arm64). The wrappers in UHPAC short-circuit; we keep this

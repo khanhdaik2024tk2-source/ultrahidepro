@@ -38,6 +38,11 @@ static int $sandbox_check(pid_t pid, const char *operation, int filter_type) {
 
 #pragma mark - SecCode*
 
+typedef struct __SecTask *SecTaskRef;
+typedef const struct __SecCode *SecStaticCodeRef;
+typedef const struct __SecRequirement *SecRequirementRef;
+typedef uint32_t SecCSFlags;
+
 typedef OSStatus (*SecCodeCopySigningInformation_t)(SecStaticCodeRef, SecCSFlags, CFDictionaryRef *);
 static SecCodeCopySigningInformation_t _orig_SecCodeCopySigningInformation = NULL;
 
@@ -140,16 +145,29 @@ void UHInstallSandboxAMFIHooks(void) {
 		[stats bumpBy:1];
 	}
 
-	MSHookFunction((void *)SecCodeCopySigningInformation,
-		(void *)$SecCodeCopySigningInformation,
-		(void **)&_orig_SecCodeCopySigningInformation);
-	MSHookFunction((void *)SecCodeCheckValidity,
-		(void *)$SecCodeCheckValidity,
-		(void **)&_orig_SecCodeCheckValidity);
-	MSHookFunction((void *)SecTaskCopyValueForEntitlement,
-		(void *)$SecTaskCopyValueForEntitlement,
-		(void **)&_orig_SecTaskCopyValueForEntitlement);
-	[stats bumpBy:3];
+	void *sec_csi = dlsym(RTLD_DEFAULT, "SecCodeCopySigningInformation");
+	if (sec_csi != NULL) {
+		MSHookFunction(sec_csi,
+			(void *)$SecCodeCopySigningInformation,
+			(void **)&_orig_SecCodeCopySigningInformation);
+		[stats bumpBy:1];
+	}
+
+	void *sec_ccv = dlsym(RTLD_DEFAULT, "SecCodeCheckValidity");
+	if (sec_ccv != NULL) {
+		MSHookFunction(sec_ccv,
+			(void *)$SecCodeCheckValidity,
+			(void **)&_orig_SecCodeCheckValidity);
+		[stats bumpBy:1];
+	}
+
+	void *sec_tve = dlsym(RTLD_DEFAULT, "SecTaskCopyValueForEntitlement");
+	if (sec_tve != NULL) {
+		MSHookFunction(sec_tve,
+			(void *)$SecTaskCopyValueForEntitlement,
+			(void **)&_orig_SecTaskCopyValueForEntitlement);
+		[stats bumpBy:1];
+	}
 
 	void *mis1 = dlsym(RTLD_DEFAULT, "MISValidateSignature");
 	if (mis1 != NULL) {

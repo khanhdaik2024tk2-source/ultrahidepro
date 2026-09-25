@@ -5,8 +5,13 @@
 #import "UHCore/UHHookStats.h"
 
 #import <Foundation/Foundation.h>
+#import <mach/mach.h>
+#if __has_include(<IOKit/IOKitLib.h>)
 #import <IOKit/IOKitLib.h>
-#import <MobileGestalt.h>
+#else
+typedef mach_port_t io_object_t;
+typedef io_object_t io_service_t;
+#endif
 #import <dlfcn.h>
 #import <ifaddrs.h>
 #import <net/if.h>
