@@ -65,6 +65,6 @@ UltraHidePro_FILES = Tweak.x \
 include $(THEOS)/makefiles/tweak.mk
 
 after-stage::
-	mkdir -p $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro
-	cp -f Resources/config.plist $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro/config.plist 2>/dev/null || true
-	cp -f Resources/vectors.json $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro/vectors.json 2>/dev/null || true
+	mkdir -p $(THEOS_STAGING_DIR)/Library/UltraHidePro
+	cp -f Resources/config.plist $(THEOS_STAGING_DIR)/Library/UltraHidePro/config.plist 2>/dev/null || true
+	cp -f Resources/vectors.json $(THEOS_STAGING_DIR)/Library/UltraHidePro/vectors.json 2>/dev/null || true
