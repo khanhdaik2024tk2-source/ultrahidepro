@@ -14,6 +14,7 @@ PROJECT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 echo "[+] Cleaning"
 rm -rf "$PROJECT_DIR/$BUILD_DIR"
 rm -rf "$PROJECT_DIR/packages"
+mkdir -p "$BUILD_DIR"
 
 echo "[+] Building package"
 cd "$PROJECT_DIR"
@@ -24,17 +25,17 @@ DEB_FILE=$(ls -t "$PROJECT_DIR/packages/"*.deb | head -n1)
 echo "[+] Built $DEB_FILE"
 
 echo "[+] Inspecting deb contents"
-dpkg-deb -c "$DEB_FILE"
+dpkg-deb -c "$DEB_FILE" > "$BUILD_DIR/deb_contents.txt"
+cat "$BUILD_DIR/deb_contents.txt"
 
 echo "[+] Verifying Info.plist inside UltraHidePro.app"
-if ! dpkg-deb -c "$DEB_FILE" | grep -q "UltraHidePro.app/Info.plist"; then
+if ! grep -F "UltraHidePro.app/Info.plist" "$BUILD_DIR/deb_contents.txt" >/dev/null; then
   echo "[!] ERROR: Info.plist is MISSING from UltraHidePro.app!"
   exit 1
 fi
 echo "[+] Found Info.plist in UltraHidePro.app"
 
 echo "[+] Extracting dylib for smoke test"
-mkdir -p "$BUILD_DIR"
 dpkg-deb -x "$DEB_FILE" "$BUILD_DIR/installed"
 
 DYLIB=$(find "$BUILD_DIR/installed" \( -name "UltraHidePro*.dylib" -o -name "UltraHidePro" \) -type f | head -n1)

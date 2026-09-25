@@ -59,14 +59,8 @@ after-stage::
 	cp -f Resources/config.plist $(THEOS_STAGING_DIR)/Library/UltraHidePro/config.plist 2>/dev/null || true
 	cp -f Resources/vectors.json $(THEOS_STAGING_DIR)/Library/UltraHidePro/vectors.json 2>/dev/null || true
 	find $(THEOS_STAGING_DIR) -name "UltraHidePro.app" -type d -exec cp -f app/Info.plist {}/Info.plist \; 2>/dev/null || true
-	mkdir -p $(THEOS_STAGING_DIR)/Applications/UltraHidePro.app
-	cp -f app/Info.plist $(THEOS_STAGING_DIR)/Applications/UltraHidePro.app/Info.plist 2>/dev/null || true
-	mkdir -p $(THEOS_STAGING_DIR)/var/jb/Applications/UltraHidePro.app
-	cp -f app/Info.plist $(THEOS_STAGING_DIR)/var/jb/Applications/UltraHidePro.app/Info.plist 2>/dev/null || true
-	chmod -R 0755 $(THEOS_STAGING_DIR)/Applications/UltraHidePro.app 2>/dev/null || true
-	chmod -R 0755 $(THEOS_STAGING_DIR)/var/jb/Applications/UltraHidePro.app 2>/dev/null || true
-	chmod 0644 $(THEOS_STAGING_DIR)/Applications/UltraHidePro.app/Info.plist 2>/dev/null || true
-	chmod 0644 $(THEOS_STAGING_DIR)/var/jb/Applications/UltraHidePro.app/Info.plist 2>/dev/null || true
+	find $(THEOS_STAGING_DIR) -name "UltraHidePro.app" -type d -exec chmod -R 0755 {} \; 2>/dev/null || true
+	find $(THEOS_STAGING_DIR) -name "Info.plist" -type f -exec chmod 0644 {} \; 2>/dev/null || true
 	mkdir -p $(THEOS_STAGING_DIR)/DEBIAN
 	cp -f layout/DEBIAN/postinst $(THEOS_STAGING_DIR)/DEBIAN/postinst 2>/dev/null || true
 	chmod 0755 $(THEOS_STAGING_DIR)/DEBIAN/postinst 2>/dev/null || true
