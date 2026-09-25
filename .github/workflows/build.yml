@@ -17,10 +17,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  offline_check:
+    name: offline static checks
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Install Python deps
+        run: |
+          python3 -m pip install --quiet --upgrade pip
+          python3 -m pip install --quiet pyyaml
+      - name: Run offline check
+        run: |
+          set -e
+          python3 scripts/ci_offline_check.py
+
   verify:
     name: build / verify (${{ matrix.arch }})
     runs-on: macos-14
     timeout-minutes: 60
+    needs: offline_check
     strategy:
       fail-fast: false
       matrix:
