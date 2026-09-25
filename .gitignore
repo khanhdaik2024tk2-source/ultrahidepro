@@ -3,6 +3,7 @@
 packages/
 .theos/
 build/
+dist/
 obj/
 _*/
 
