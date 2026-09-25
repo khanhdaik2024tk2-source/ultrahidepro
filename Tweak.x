@@ -8,7 +8,6 @@
 #import "UHCore/UHHookStats.h"
 #import "UHCore/UHMachO.h"
 #import "UHCore/UHPAC.h"
-#import "UHCore/UHBrkGuard.h"
 
 #import "UHHooks/UHFileSystem.h"
 #import "UHHooks/UHProcess.h"
@@ -18,10 +17,8 @@
 #import "UHHooks/UHNetworkIOKit.h"
 #import "UHHooks/UHBridge.h"
 #import "UHHooks/UHAntiHook.h"
-#import "UHHooks/UHRuntimeProtection.h"
 
 #import "UHKernel/UHKcall.h"
-#import "UHRules/UHRuleLoader.h"
 
 // Constructor — runs as soon as the tweak dylib finishes loading.
 __attribute__((constructor))
@@ -48,11 +45,8 @@ static void UHInit(void) {
 		return;
 	}
 
-	UHLogInfo(@"UltraHide Pro v1.1.6 booting for %@", [UHConfig hostBundleID]);
+	UHLogInfo(@"UltraHide Pro v1.1.7 booting for %@", [UHConfig hostBundleID]);
 
-	// Order matters: capture PAC, capture Mach-O, then load config.
-	[UHPAC bootstrap];
-	[UHMachO bootstrap];
 	UHConfig *cfg = [UHConfig sharedInstance];
 	[UHHookStats sharedInstance];
 
@@ -63,7 +57,7 @@ static void UHInit(void) {
 	if (cfg.sandboxAmfiEnabled)  UHInstallSandboxAMFIHooks();
 	if (cfg.networkIOKitEnabled) UHInstallNetworkIOKitHooks();
 	if (cfg.objcAggregateEnabled) UHInstallBridgeHooks();
-	UHInstallAntiHookHooks();           // always on
+	UHInstallAntiHookHooks();
 
 	if (cfg.kernelEnabled) {
 		UHInitKernelPrimitives();
@@ -71,8 +65,5 @@ static void UHInit(void) {
 	}
 
 	NSUInteger activeCount = [UHHookStats sharedInstance].activeCount;
-	UHLogInfo(@"UltraHide Pro loaded with %lu active hooks", (unsigned long)activeCount);
-
-	// Expose the active count via env so external tools can introspect.
-	setenv("ULTRAHIDE_ACTIVE_HOOKS", [[NSString stringWithFormat:@"%lu", (unsigned long)activeCount] UTF8String], 1);
+	UHLogInfo(@"UltraHide Pro v1.1.7 loaded with %lu active hooks", (unsigned long)activeCount);
 }

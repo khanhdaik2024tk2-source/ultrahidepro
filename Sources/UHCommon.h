@@ -115,6 +115,25 @@ static inline bool UHMachOIsTweakPathFast(const char *path) {
 	return false;
 }
 
+// Pure C fast jailbreak environment variable filter (ZERO ObjC allocations, safe in all contexts)
+static inline bool UHEnvBlockedFast(const char *name) {
+	if (name == NULL || name[0] == '\0') return false;
+	if (strncasecmp(name, "DYLD_INSERT_LIBRARIES", 21) == 0) return true;
+	if (strncasecmp(name, "DYLD_PRINT_", 11) == 0) return true;
+	if (strncasecmp(name, "DYLD_LIBRARY_PATH", 17) == 0) return true;
+	if (strncasecmp(name, "DYLD_FRAMEWORK_PATH", 19) == 0) return true;
+	if (strncasecmp(name, "DYLD_ROOT_PATH", 14) == 0) return true;
+	if (strncasecmp(name, "_MSSafeMode", 11) == 0) return true;
+	if (strncasecmp(name, "MSSafeMode", 10) == 0) return true;
+	if (strncasecmp(name, "CYDIA_", 6) == 0) return true;
+	if (strncasecmp(name, "FRIDA_", 6) == 0) return true;
+	if (strncasecmp(name, "THEOS_", 6) == 0) return true;
+	if (strncasecmp(name, "THEOS", 5) == 0) return true;
+	if (strncasecmp(name, "ULTRAHIDE_", 10) == 0) return true;
+	if (strncasecmp(name, "JAILBREAK_", 10) == 0) return true;
+	return false;
+}
+
 // Pure C fast jailbreak path filter (ZERO ObjC allocations, safe for stat/open/lstat/access)
 static inline bool UHPathBlockedFast(const char *path) {
 	if (path == NULL || path[0] == '\0') return false;

@@ -177,42 +177,6 @@ static FILE *$fopen(const char *path, const char *mode) {
 	return _orig_fopen(path, mode);
 }
 
-typedef int (*open_t)(const char *, int, ...);
-static open_t _orig_open = NULL;
-static int $open(const char *path, int flags, ...) {
-	mode_t mode = 0;
-	if (flags & O_CREAT) {
-		va_list ap;
-		va_start(ap, flags);
-		mode = va_arg(ap, int);
-		va_end(ap);
-	}
-	if (UH_UNLIKELY(UHPathBlocked(path))) {
-		errno = ENOENT;
-		return -1;
-	}
-	if (flags & O_CREAT) return _orig_open(path, flags, mode);
-	return _orig_open(path, flags);
-}
-
-typedef int (*openat_t)(int, const char *, int, ...);
-static openat_t _orig_openat = NULL;
-static int $openat(int fd, const char *path, int flags, ...) {
-	mode_t mode = 0;
-	if (flags & O_CREAT) {
-		va_list ap;
-		va_start(ap, flags);
-		mode = va_arg(ap, int);
-		va_end(ap);
-	}
-	if (UH_UNLIKELY(UHPathBlocked(path))) {
-		errno = ENOENT;
-		return -1;
-	}
-	if (flags & O_CREAT) return _orig_openat(fd, path, flags, mode);
-	return _orig_openat(fd, path, flags);
-}
-
 typedef int (*stat_t)(const char *, struct stat *);
 static stat_t _orig_stat = NULL;
 static int $stat(const char *path, struct stat *buf) {
@@ -227,13 +191,6 @@ static int $lstat(const char *path, struct stat *buf) {
 	return _orig_lstat(path, buf);
 }
 
-typedef int (*fstatat_t)(int, const char *, struct stat *, int);
-static fstatat_t _orig_fstatat = NULL;
-static int $fstatat(int fd, const char *path, struct stat *buf, int flag) {
-	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
-	return _orig_fstatat(fd, path, buf, flag);
-}
-
 typedef int (*access_t)(const char *, int);
 static access_t _orig_access = NULL;
 static int $access(const char *path, int mode) {
@@ -241,122 +198,18 @@ static int $access(const char *path, int mode) {
 	return _orig_access(path, mode);
 }
 
-typedef int (*faccessat_t)(int, const char *, int, int);
-static faccessat_t _orig_faccessat = NULL;
-static int $faccessat(int fd, const char *path, int mode, int flag) {
-	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
-	return _orig_faccessat(fd, path, mode, flag);
-}
-
-typedef ssize_t (*readlink_t)(const char *, char *, size_t);
-static readlink_t _orig_readlink = NULL;
-static ssize_t $readlink(const char *path, char *buf, size_t bufsiz) {
-	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
-	return _orig_readlink(path, buf, bufsiz);
-}
-
-typedef ssize_t (*readlinkat_t)(int, const char *, char *, size_t);
-static readlinkat_t _orig_readlinkat = NULL;
-static ssize_t $readlinkat(int fd, const char *path, char *buf, size_t bufsiz) {
-	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
-	return _orig_readlinkat(fd, path, buf, bufsiz);
-}
-
-typedef char *(*realpath_t)(const char *, char *);
-static realpath_t _orig_realpath = NULL;
-static char *$realpath(const char *path, char *resolved_path) {
-	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return NULL; }
-	char *res = _orig_realpath(path, resolved_path);
-	if (res != NULL && UHPathBlocked(res)) {
-		errno = ENOENT;
-		return NULL;
-	}
-	return res;
-}
-
-typedef int (*statfs_t)(const char *, struct statfs *);
-static statfs_t _orig_statfs = NULL;
-static int $statfs(const char *path, struct statfs *buf) {
-	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
-	return _orig_statfs(path, buf);
-}
-
-typedef DIR *(*opendir_t)(const char *);
-static opendir_t _orig_opendir = NULL;
-static DIR *$opendir(const char *path) {
-	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return NULL; }
-	return _orig_opendir(path);
-}
-
-typedef struct dirent *(*readdir_t)(DIR *);
-static readdir_t _orig_readdir = NULL;
-
-static bool UHReadDirIsParentBlacklisted(const char *parent) {
-	if (parent == NULL || parent[0] == '\0') return false;
-	if (strcmp(parent, "/var") == 0) return true;
-	if (strcmp(parent, "/private/var") == 0) return true;
-	if (strstr(parent, "/private/preboot") != NULL) return true;
-	if (strcmp(parent, "/") == 0) return true;
-	if (strcmp(parent, "/Applications") == 0) return true;
-	if (strcmp(parent, "/var/jb/Applications") == 0) return true;
-	if (strcmp(parent, "/var/jb/usr/lib") == 0) return true;
-	if (strcmp(parent, "/var/jb/Library") == 0) return true;
-	if (strcmp(parent, "/Library") == 0) return true;
-	if (strstr(parent, "Library/Preferences") != NULL) return true;
-	if (strstr(parent, "Library/Caches") != NULL) return true;
-	return false;
-}
-
-#define UH_READDIR_MAX_ITER 4096
-
-static struct dirent *$readdir(DIR *dirp) {
-	if (dirp == NULL) return NULL;
-	int fd = dirfd(dirp);
-	char parent[PATH_MAX] = {0};
-	if (fd < 0 || fcntl(fd, F_GETPATH, parent) != 0) {
-		return _orig_readdir(dirp);
-	}
-	if (!UHReadDirIsParentBlacklisted(parent)) {
-		return _orig_readdir(dirp);
-	}
-	for (int iter = 0; iter < UH_READDIR_MAX_ITER; iter++) {
-		struct dirent *e = _orig_readdir(dirp);
-		if (e == NULL) return NULL;
-		if (e->d_name[0] == '.') {
-			if (e->d_name[1] == '\0' ||
-			    (e->d_name[1] == '.' && e->d_name[2] == '\0')) {
-				return e;
-			}
-		}
-		if ((strcmp(parent, "/var") == 0 || strcmp(parent, "/private/var") == 0) &&
-		    strcmp(e->d_name, "jb") == 0) {
-			continue;
-		}
-		if (strstr(parent, "/private/preboot") != NULL &&
-		    (strstr(e->d_name, "dopamine") != NULL || strstr(e->d_name, "jb") != NULL)) {
-			continue;
-		}
-		char full[PATH_MAX];
-		snprintf(full, sizeof(full), "%s/%s", parent, e->d_name);
-		if (!UHPathBlockedFast(full)) {
-			return e;
-		}
-	}
-	return NULL;
-}
-
 static id (*_orig_NSBundle_bundleWithPath_)(id, SEL, NSString *) = NULL;
 static id (*_orig_NSBundle_bundleWithURL_)(id, SEL, NSURL *) = NULL;
 
 static id $NSBundle_bundleWithPath_(id self, SEL _cmd, NSString *path) {
-	if (UH_UNLIKELY([UHConfig shouldBlockPath:path ?: @""])) {
+	if (UH_UNLIKELY(path != nil && UHPathBlockedFast([path UTF8String]))) {
 		return nil;
 	}
 	return _orig_NSBundle_bundleWithPath_(self, _cmd, path);
 }
 
 static id $NSBundle_bundleWithURL_(id self, SEL _cmd, NSURL *url) {
-	if (UH_UNLIKELY(url != nil && [UHConfig shouldBlockPath:url.path ?: @""])) {
+	if (UH_UNLIKELY(url != nil && url.path != nil && UHPathBlockedFast([url.path UTF8String]))) {
 		return nil;
 	}
 	return _orig_NSBundle_bundleWithURL_(self, _cmd, url);
@@ -397,21 +250,11 @@ void UHInstallFileSystemHooks(void) {
 		[stats bumpBy:12];
 	}
 
-	MSHookFunction((void *)fopen,      (void *)$fopen,      (void **)&_orig_fopen);
-	MSHookFunction((void *)open,       (void *)$open,       (void **)&_orig_open);
-	MSHookFunction((void *)openat,     (void *)$openat,     (void **)&_orig_openat);
-	MSHookFunction((void *)stat,       (void *)$stat,       (void **)&_orig_stat);
-	MSHookFunction((void *)lstat,      (void *)$lstat,      (void **)&_orig_lstat);
-	MSHookFunction((void *)fstatat,    (void *)$fstatat,    (void **)&_orig_fstatat);
-	MSHookFunction((void *)access,     (void *)$access,     (void **)&_orig_access);
-	MSHookFunction((void *)faccessat,  (void *)$faccessat,  (void **)&_orig_faccessat);
-	MSHookFunction((void *)readlink,   (void *)$readlink,   (void **)&_orig_readlink);
-	MSHookFunction((void *)readlinkat, (void *)$readlinkat, (void **)&_orig_readlinkat);
-	MSHookFunction((void *)realpath,   (void *)$realpath,   (void **)&_orig_realpath);
-	MSHookFunction((void *)statfs,     (void *)$statfs,     (void **)&_orig_statfs);
-	MSHookFunction((void *)opendir,    (void *)$opendir,    (void **)&_orig_opendir);
-	MSHookFunction((void *)readdir,    (void *)$readdir,    (void **)&_orig_readdir);
-	[stats bumpBy:14];
+	MSHookFunction((void *)stat,   (void *)$stat,   (void **)&_orig_stat);
+	MSHookFunction((void *)lstat,  (void *)$lstat,  (void **)&_orig_lstat);
+	MSHookFunction((void *)access, (void *)$access, (void **)&_orig_access);
+	MSHookFunction((void *)fopen,  (void *)$fopen,  (void **)&_orig_fopen);
+	[stats bumpBy:4];
 
 	Class bundleCls = NSClassFromString(@"NSBundle");
 	if (bundleCls != NULL) {

@@ -118,19 +118,9 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 + (BOOL)isTargetApp:(NSString *)bundleID {
 	if (bundleID.length == 0) return NO;
 	UHConfig *cfg = [self sharedInstance];
-	if (cfg.targetApps.count == 0) return YES;
+	if (cfg.targetApps.count == 0) return NO;
 	for (NSString *target in cfg.targetApps) {
 		if ([bundleID caseInsensitiveCompare:target] == NSOrderedSame) return YES;
-	}
-	// Fallback auto-detection for popular banking apps if bundleID variants differ
-	NSString *lower = [bundleID lowercaseString];
-	if ([lower containsString:@"mbbank"] ||
-	    [lower containsString:@"mbmobile"] ||
-	    [lower isEqualToString:@"com.mb.mbbank"] ||
-	    [lower containsString:@"techcombank"] ||
-	    [lower containsString:@"digibank"] ||
-	    [lower containsString:@"vcb"]) {
-		return YES;
 	}
 	return NO;
 }

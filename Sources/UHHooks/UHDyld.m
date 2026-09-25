@@ -20,10 +20,24 @@ static dlopen_t _orig_dlopen = NULL;
 
 static void *$dlopen(const char *path, int mode) {
 	if (UH_UNLIKELY(path != NULL && UHPathBlockedFast(path))) {
-		UHLogDebugF(@"dlopen: blocked %s", path);
 		return NULL;
 	}
 	return _orig_dlopen(path, mode);
+}
+
+#pragma mark - dladdr
+
+typedef int (*dladdr_t)(const void *, Dl_info *);
+static dladdr_t _orig_dladdr = NULL;
+
+static int $dladdr(const void *addr, Dl_info *info) {
+	int rc = _orig_dladdr(addr, info);
+	if (rc != 0 && info != NULL && info->dli_fname != NULL) {
+		if (UH_UNLIKELY(UHMachOIsTweakPathFast(info->dli_fname))) {
+			info->dli_fname = "/usr/lib/system/libsystem_trace.dylib";
+		}
+	}
+	return rc;
 }
 
 #pragma mark - dlsym
@@ -64,30 +78,15 @@ static dlsym_t _orig_dlsym = NULL;
 static void *$dlsym(void *handle, const char *symbol) {
 	if (UH_UNLIKELY(symbol != NULL && UHDyldIsHiddenSymbolPrefix(symbol))) {
 		Dl_info info;
-		if (dladdr(__builtin_return_address(0), &info) != 0 &&
+		dladdr_t fn_dladdr = _orig_dladdr ?: dladdr;
+		if (fn_dladdr(__builtin_return_address(0), &info) != 0 &&
 		    info.dli_fname != NULL &&
 		    UHMachOIsTweakPathFast(info.dli_fname)) {
 			return _orig_dlsym(handle, symbol);
 		}
-		UHLogDebugF(@"dlsym: hid %s", symbol);
 		return NULL;
 	}
 	return _orig_dlsym(handle, symbol);
-}
-
-#pragma mark - dladdr
-
-typedef int (*dladdr_t)(const void *, Dl_info *);
-static dladdr_t _orig_dladdr = NULL;
-
-static int $dladdr(const void *addr, Dl_info *info) {
-	int rc = _orig_dladdr(addr, info);
-	if (rc != 0 && info != NULL && info->dli_fname != NULL) {
-		if (UH_UNLIKELY(UHMachOIsTweakPathFast(info->dli_fname))) {
-			info->dli_fname = "/usr/lib/system/libsystem_trace.dylib";
-		}
-	}
-	return rc;
 }
 
 #pragma mark - Installer
@@ -99,14 +98,14 @@ void UHInstallDyldHooks(void) {
 	MSHookFunction((void *)dlopen,
 	               (void *)$dlopen,
 	               (void **)&_orig_dlopen);
-	MSHookFunction((void *)dlsym,
-	               (void *)$dlsym,
-	               (void **)&_orig_dlsym);
 	MSHookFunction((void *)dladdr,
 	               (void *)$dladdr,
 	               (void **)&_orig_dladdr);
+	MSHookFunction((void *)dlsym,
+	               (void *)$dlsym,
+	               (void **)&_orig_dlsym);
 	[stats bumpBy:3];
 
-	UHLogInfoF(@"dyld hooks installed (%lu total)",
+	UHLogInfoF(@"dyld hooks installed (%lu total, safe mode)",
 		(unsigned long)(stats.activeCount - before));
 }
