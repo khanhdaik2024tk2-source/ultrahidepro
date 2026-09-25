@@ -37,27 +37,18 @@
 //
 // We also defensively skip the entire tweak if it's being loaded into a
 // process that should never host a hide-tweak (SpringBoard stays healthy).
-static BOOL UHTargetProcessAllowed(void) {
-	NSString *bid = [UHConfig hostBundleID];
-	if (bid == nil) return YES;
-	static NSSet<NSString *> *denyList;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		denyList = [NSSet setWithArray:@[
-			@"com.apple.springboard",
-			@"com.apple.backboardd",
-			@"com.apple.runningboard",
-			@"com.apple.frontboard",
-			@"com.apple.biokitd",
-			@"com.apple.dt.xcode.debugger",
-		]];
-	});
-	return ![denyList containsObject:bid];
-}
-
 __attribute__((constructor))
 static void UHInit(void) {
-	UHLogInfo(@"UltraHide Pro v1.0.0 booting...");
+	// Zero-Risk Safe Mode Guard:
+	// Only activate inside target applications.
+	// If the current process is SpringBoard, backboardd, a system daemon, or
+	// not in target_apps, immediately bail out before doing ANY work
+	// (no signal handlers, no hooks, no memory scans).
+	if (![UHConfig activeForCurrentApp]) {
+		return;
+	}
+
+	UHLogInfo(@"UltraHide Pro v1.0.0 booting for %@", [UHConfig hostBundleID]);
 
 	// Order matters: capture PAC, capture Mach-O, then load config.
 	[UHPAC bootstrap];
@@ -81,12 +72,6 @@ static void UHInit(void) {
 		return;
 	}
 
-	if (!UHTargetProcessAllowed()) {
-		UHLogInfoF(@"Skipping hook installation in denylisted process (%@)", [UHConfig hostBundleID]);
-		setenv("ULTRAHIDE_ACTIVE_HOOKS", "0", 1);
-		return;
-	}
-
 	if (cfg.filesystemEnabled)   UHInstallFileSystemHooks();
 	if (cfg.processEnabled)      UHInstallProcessHooks();
 	if (cfg.dyldEnabled)         UHInstallDyldHooks();
@@ -98,10 +83,8 @@ static void UHInit(void) {
 	UHInstallRuntimeProtectionHooks();  // always on
 
 	if (cfg.kernelEnabled) {
-		if ([UHConfig activeForCurrentApp]) {
-			UHInitKernelPrimitives();
-			UHInstallKernelPatches();
-		}
+		UHInitKernelPrimitives();
+		UHInstallKernelPatches();
 	}
 
 	// Dynamic rules last, so they can override defaults installed above.
