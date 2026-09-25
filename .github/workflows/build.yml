@@ -1,0 +1,187 @@
+name: build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+    inputs:
+      target_arch:
+        description: 'arm64 (Dopamine 3.0.9 rootless) or arm64e (future)'
+        required: false
+        default: 'arm64'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: build / verify (${{ matrix.arch }})
+    runs-on: macos-14
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64]
+
+    env:
+      THEOS: /opt/theos
+      THEOS_DEVICE_IP: 127.0.0.1
+      THEOS_DEVICE_PORT: 22
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          show-progress: false
+
+      - name: Prepare paths
+        run: |
+          echo "THEOS=/opt/theos"  >> $GITHUB_ENV
+          echo "/opt/theos/bin"     >> $GITHUB_PATH
+          echo "/opt/homebrew/bin"   >> $GITHUB_PATH
+
+      - name: Show tool versions
+        run: |
+          sw_vers
+          clang --version || true
+          xcode-select -p
+
+      - name: Cache Theos
+        id: cache-theos
+        uses: actions/cache@v4
+        with:
+          path: /opt/theos
+          key: theos-$(date +%Y%V)
+          restore-keys: |
+            theos-
+
+      - name: Install Theos (cache miss)
+        if: steps.cache-theos.outputs.cache-hit != 'true'
+        run: |
+          sudo mkdir -p /opt
+          sudo chown -R $(whoami) /opt
+          git clone --depth 1 https://github.com/theos/theos.git /opt/theos
+
+      - name: Install build tools
+        run: |
+          brew install ldid jq xz
+
+      - name: Cache iOS 18.6 SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: /opt/theos/sdks/iPhoneOS18.6.sdk
+          key: ios-sdk-18.6-archive-$(date +%Y%V)
+          restore-keys: |
+            ios-sdk-18.6-archive-
+
+      - name: Download iOS SDK (cache miss)
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          cd /tmp
+          # Fall-back URL list — try theos/sdks, sbingner/SDK and Apple
+          # Xcode mirror in that order.
+          URLS=(
+            "https://github.com/theos/sdks/releases/download/iPhoneOS18.6/iPhoneOS18.6.sdk.tar.xz"
+            "https://github.com/sbingner/SDK/releases/download/18.6/iPhoneOS18.6.sdk.tar.xz"
+          )
+          for u in "${URLS[@]}"; do
+            echo "[sdk] trying $u"
+            if curl --fail -sSL -o ios18.6.tar.xz "$u"; then
+              break
+            fi
+          done
+          test -s ios18.6.tar.xz
+          mkdir -p /opt/theos/sdks
+          tar -xJf ios18.6.tar.xz -C /opt/theos/sdks
+          rm ios18.6.tar.xz
+
+      - name: Validate sources
+        run: |
+          set -e
+          python3 -c "import json; print('vectors.json OK ->', len(json.load(open('Resources/vectors.json'))['vectors']), 'vectors')"
+          python3 -c "import plistlib; plistlib.load(open('Resources/config.plist', 'rb')); print('config.plist OK')"
+          python3 -c "import plistlib; plistlib.load(open('Resources/entitlements.plist', 'rb')); print('entitlements.plist OK')"
+          python3 -c "import plistlib; plistlib.load(open('entry.plist', 'rb')); print('entry.plist OK')"
+
+      - name: Build
+        run: |
+          set -e
+          bash scripts/test_app.sh
+
+      - name: Smoke inspect
+        run: |
+          set -e
+          DEB=$(ls -t packages/*.deb | head -n1)
+          echo "[ci] built $DEB size=$(stat -f%z $DEB)"
+          dpkg-deb -I "$DEB"
+          dpkg-deb -c "$DEB" | head -n 60
+
+      - name: Fail-soft post checks
+        if: always()
+        run: |
+          set -e
+          echo "=== Tail of dmesg-style messages ===" || true
+          if compgen -G "build/*.log" > /dev/null; then
+            tail -n 80 build/*.log
+          fi
+
+      - name: Upload .deb
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UltraHidePro-${{ matrix.arch }}-deb
+          path: packages/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UltraHidePro-${{ matrix.arch }}-log
+          path: |
+            build/
+            packages/
+            .theos/
+          if-no-files-found: warn
+          retention-days: 3
+
+  lint:
+    name: clang static analysis
+    runs-on: macos-14
+    timeout-minutes: 20
+    continue-on-error: true
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Install Theos
+        run: |
+          if [[ ! -d /opt/theos ]]; then
+            sudo mkdir -p /opt
+            sudo chown -R $(whoami) /opt
+            git clone --depth 1 https://github.com/theos/theos.git /opt/theos
+          fi
+      - name: Cache SDK
+        uses: actions/cache@v4
+        with:
+          path: /opt/theos/sdks/iPhoneOS18.6.sdk
+          key: ios-sdk-18.6-archive-$(date +%Y%V)
+
+      - name: Static analysis
+        run: |
+          set +e
+          mkdir -p build
+          THEOS=/opt/theos PATH=/opt/theos/bin:$PATH make analyze=1 2>&1 | tee build/analyze.log
+          rc=${PIPESTATUS[0]}
+          echo "analyze exit=$rc"
+          # intentionally non-fatal so PRs don't get blocked by static
+          # analysis noise; treat exit non-zero as warning.
+          exit 0

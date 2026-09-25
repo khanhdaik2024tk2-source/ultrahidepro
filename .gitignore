@@ -1,0 +1,38 @@
+# Build artifacts (Theos)
+.packages/
+packages/
+.theos/
+build/
+obj/
+_*/
+
+# Intermediate
+*.o
+*.lo
+*.la
+*.obj
+*.so
+*.dylib
+
+# Logs
+*.log
+*.log.*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.bak
+*.tmp
+*.orig
+*.rej
+
+# Output of test_app.sh
+build/
+test_install/
+
+# GitHub Actions workspace on self-hosted runners (rare)
+# Use literal variable expansion so it doesn't accidentally match
+# random dirs starting with `${{`.
+${GITHUB_WORKSPACE}/

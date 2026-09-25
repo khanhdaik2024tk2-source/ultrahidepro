@@ -1,0 +1,436 @@
+{
+	"version": "1.0",
+	"description": "Dynamic vector map for UltraHide Pro. The rule loader watches this file and updates active hooks at runtime.",
+	"vectors": [
+		{
+			"id": "nsfilemanager_file_exists",
+			"layer": "filesystem",
+			"selector": "NSFileManager::fileExistsAtPath:",
+			"hook_type": "objc_method",
+			"strategy": "return_false_for_blacklist",
+			"risk": "low",
+			"bypass_rate_estimate": 0.97
+		},
+		{
+			"id": "fopen_jb_paths",
+			"layer": "filesystem",
+			"selector": "libc::fopen",
+			"hook_type": "fishhook",
+			"strategy": "return_null_for_blacklist",
+			"risk": "low",
+			"bypass_rate_estimate": 0.94
+		},
+		{
+			"id": "open_syscall_jb_paths",
+			"layer": "filesystem",
+			"selector": "libc::open",
+			"hook_type": "fishhook",
+			"strategy": "return_-1_for_blacklist",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.92
+		},
+		{
+			"id": "stat_jb_paths",
+			"layer": "filesystem",
+			"selector": "libc::stat",
+			"hook_type": "fishhook",
+			"strategy": "return_-1_for_blacklist",
+			"risk": "low",
+			"bypass_rate_estimate": 0.95
+		},
+		{
+			"id": "access_jb_paths",
+			"layer": "filesystem",
+			"selector": "libc::access",
+			"hook_type": "fishhook",
+			"strategy": "return_-1_for_blacklist",
+			"risk": "low",
+			"bypass_rate_estimate": 0.95
+		},
+		{
+			"id": "opendir_jb_paths",
+			"layer": "filesystem",
+			"selector": "libc::opendir",
+			"hook_type": "fishhook",
+			"strategy": "filter_blacklisted_entries_in_readdir",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.88
+		},
+		{
+			"id": "fork_in_target_app",
+			"layer": "process",
+			"selector": "libc::fork",
+			"hook_type": "fishhook",
+			"strategy": "return_eperm_in_target_app",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.90
+		},
+		{
+			"id": "vfork_in_target_app",
+			"layer": "process",
+			"selector": "libc::vfork",
+			"hook_type": "fishhook",
+			"strategy": "return_eperm_in_target_app",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.90
+		},
+		{
+			"id": "execve_blacklist",
+			"layer": "process",
+			"selector": "libc::execve",
+			"hook_type": "fishhook",
+			"strategy": "return_eperm_for_jb_binaries",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.92
+		},
+		{
+			"id": "posix_spawn_blacklist",
+			"layer": "process",
+			"selector": "libc::posix_spawn",
+			"hook_type": "fishhook",
+			"strategy": "return_eperm_for_jb_binaries",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.90
+		},
+		{
+			"id": "sysctl_kern_proc",
+			"layer": "process",
+			"selector": "libc::sysctl",
+			"hook_type": "fishhook",
+			"strategy": "mask_blacklisted_processes",
+			"risk": "high",
+			"bypass_rate_estimate": 0.95
+		},
+		{
+			"id": "sysctlbyname_jailbreak",
+			"layer": "process",
+			"selector": "libc::sysctlbyname",
+			"hook_type": "fishhook",
+			"strategy": "filter_jailbreak_sysctl",
+			"risk": "high",
+			"bypass_rate_estimate": 0.96
+		},
+		{
+			"id": "getppid_spoof",
+			"layer": "process",
+			"selector": "libc::getppid",
+			"hook_type": "fishhook",
+			"strategy": "return_1_for_suspicious_parents",
+			"risk": "low",
+			"bypass_rate_estimate": 0.80
+		},
+		{
+			"id": "ptrace_deny_attach",
+			"layer": "process",
+			"selector": "libc::ptrace",
+			"hook_type": "fishhook",
+			"strategy": "return_0_for_pt_deny_attach",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "csops_spoof",
+			"layer": "process",
+			"selector": "libc::csops",
+			"hook_type": "fishhook",
+			"strategy": "spoof_csflags",
+			"risk": "high",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "dyld_image_count",
+			"layer": "dyld",
+			"selector": "libdyld::_dyld_image_count",
+			"hook_type": "fishhook",
+			"strategy": "subtract_hidden_count",
+			"risk": "low",
+			"bypass_rate_estimate": 0.92
+		},
+		{
+			"id": "dyld_get_image_name",
+			"layer": "dyld",
+			"selector": "libdyld::_dyld_get_image_name",
+			"hook_type": "fishhook",
+			"strategy": "return_disguised_for_hidden",
+			"risk": "low",
+			"bypass_rate_estimate": 0.93
+		},
+		{
+			"id": "dlopen_blacklist",
+			"layer": "dyld",
+			"selector": "libc::dlopen",
+			"hook_type": "fishhook",
+			"strategy": "return_null_for_jb_dylibs",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "dlsym_blacklist",
+			"layer": "dyld",
+			"selector": "libc::dlsym",
+			"hook_type": "fishhook",
+			"strategy": "return_null_for_jb_symbols",
+			"risk": "low",
+			"bypass_rate_estimate": 0.88
+		},
+		{
+			"id": "objc_getclasslist_filter",
+			"layer": "dyld",
+			"selector": "objc::objc_copyClassList",
+			"hook_type": "fishhook",
+			"strategy": "filter_jb_classes",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.80
+		},
+		{
+			"id": "getenv_blacklist",
+			"layer": "environment",
+			"selector": "libc::getenv",
+			"hook_type": "fishhook",
+			"strategy": "return_null_for_blacklist",
+			"risk": "low",
+			"bypass_rate_estimate": 0.95
+		},
+		{
+			"id": "setenv_blacklist",
+			"layer": "environment",
+			"selector": "libc::setenv",
+			"hook_type": "fishhook",
+			"strategy": "return_-1_for_blacklist",
+			"risk": "low",
+			"bypass_rate_estimate": 0.95
+		},
+		{
+			"id": "canopenurl_jb",
+			"layer": "environment",
+			"selector": "UIApplication::canOpenURL:",
+			"hook_type": "objc_method",
+			"strategy": "return_false_for_blacklist_schemes",
+			"risk": "low",
+			"bypass_rate_estimate": 0.92
+		},
+		{
+			"id": "lsappworkspace_applicationisinstalled",
+			"layer": "environment",
+			"selector": "LSApplicationWorkspace::applicationIsInstalled:",
+			"hook_type": "objc_method",
+			"strategy": "return_false_for_jb_apps",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "system_property_get",
+			"layer": "environment",
+			"selector": "libsystem_c::__system_property_get",
+			"hook_type": "fishhook",
+			"strategy": "mask_ro_boot_jailbreak",
+			"risk": "low",
+			"bypass_rate_estimate": 0.90
+		},
+		{
+			"id": "sandbox_check",
+			"layer": "sandbox_amfi",
+			"selector": "libsystem_sandbox::sandbox_check",
+			"hook_type": "fishhook",
+			"strategy": "return_0_for_jb_paths",
+			"risk": "high",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "sec_code_check_validity",
+			"layer": "sandbox_amfi",
+			"selector": "Security::SecCodeCheckValidity",
+			"hook_type": "fishhook",
+			"strategy": "return_errSecSuccess",
+			"risk": "high",
+			"bypass_rate_estimate": 0.80
+		},
+		{
+			"id": "sec_code_copy_signing_info",
+			"layer": "sandbox_amfi",
+			"selector": "Security::SecCodeCopySigningInformation",
+			"hook_type": "fishhook",
+			"strategy": "strip_cs_adhoc_force_cs_valid",
+			"risk": "high",
+			"bypass_rate_estimate": 0.80
+		},
+		{
+			"id": "sec_task_copy_entitlement",
+			"layer": "sandbox_amfi",
+			"selector": "Security::SecTaskCopyValueForEntitlement",
+			"hook_type": "fishhook",
+			"strategy": "mask_suspicious_entitlements",
+			"risk": "high",
+			"bypass_rate_estimate": 0.80
+		},
+		{
+			"id": "mis_validate_signature",
+			"layer": "sandbox_amfi",
+			"selector": "MIS::MISValidateSignature",
+			"hook_type": "fishhook",
+			"strategy": "return_0",
+			"risk": "high",
+			"bypass_rate_estimate": 0.80
+		},
+		{
+			"id": "getifaddrs_utun",
+			"layer": "network_iokit",
+			"selector": "libc::getifaddrs",
+			"hook_type": "fishhook",
+			"strategy": "filter_utun_entries",
+			"risk": "low",
+			"bypass_rate_estimate": 0.92
+		},
+		{
+			"id": "io_service_open_jb",
+			"layer": "network_iokit",
+			"selector": "IOKit::io_service_open_extended",
+			"hook_type": "fishhook",
+			"strategy": "return_error_for_jb_services",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.78
+		},
+		{
+			"id": "mobile_gestalt_copy_answer",
+			"layer": "network_iokit",
+			"selector": "MobileGestalt::MGCopyAnswer",
+			"hook_type": "find_private_symbol_then_hook",
+			"strategy": "mask_blacklisted_keys",
+			"risk": "critical",
+			"bypass_rate_estimate": 0.92
+		},
+		{
+			"id": "aggregate_performchecks",
+			"layer": "objc_aggregate",
+			"selector": "*::performChecks",
+			"hook_type": "objc_method_regex",
+			"strategy": "return_force_clean",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "aggregate_amijailbroken",
+			"layer": "objc_aggregate",
+			"selector": "*::amIJailbroken",
+			"hook_type": "objc_method_regex",
+			"strategy": "return_no",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.90
+		},
+		{
+			"id": "aggregate_isjailbroken",
+			"layer": "objc_aggregate",
+			"selector": "*::isJailbroken",
+			"hook_type": "objc_method_regex",
+			"strategy": "return_no",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.90
+		},
+		{
+			"id": "aggregate_amidebugged",
+			"layer": "objc_aggregate",
+			"selector": "*::amIDebugged",
+			"hook_type": "objc_method_regex",
+			"strategy": "return_no",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "aggregate_verifyintegrity",
+			"layer": "objc_aggregate",
+			"selector": "*::verifyIntegrity",
+			"hook_type": "objc_method_regex",
+			"strategy": "return_yes",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "anti_hook_dyld_image_count",
+			"layer": "anti_anti_hook",
+			"selector": "libdyld::_dyld_image_count",
+			"hook_type": "fishhook",
+			"strategy": "subtract_self_count",
+			"risk": "low",
+			"bypass_rate_estimate": 0.95
+		},
+		{
+			"id": "anti_hook_dyld_get_image_name",
+			"layer": "anti_anti_hook",
+			"selector": "libdyld::_dyld_get_image_name",
+			"hook_type": "fishhook",
+			"strategy": "return_disguised_for_own_path",
+			"risk": "low",
+			"bypass_rate_estimate": 0.95
+		},
+		{
+			"id": "anti_hook_vm_region",
+			"layer": "anti_anti_hook",
+			"selector": "libsystem_kernel::mach_vm_region",
+			"hook_type": "fishhook",
+			"strategy": "skip_own_regions",
+			"risk": "medium",
+			"bypass_rate_estimate": 0.80
+		},
+		{
+			"id": "anti_hook_csflags_in_self",
+			"layer": "anti_anti_hook",
+			"selector": "libc::csops",
+			"hook_type": "fishhook",
+			"strategy": "spoof_csflags_for_self",
+			"risk": "high",
+			"bypass_rate_estimate": 0.85
+		},
+		{
+			"id": "runtime_protect_brk_spoof",
+			"layer": "runtime_protection",
+			"selector": "libsystem_kernel::vm_read_overwrite",
+			"hook_type": "fishhook",
+			"strategy": "replace_brk_with_nop_in_returned_bytes",
+			"risk": "high",
+			"bypass_rate_estimate": 0.80
+		},
+		{
+			"id": "runtime_protect_pac_spoof",
+			"layer": "runtime_protection",
+			"selector": "arm64e::xpacia/xpacd",
+			"hook_type": "compiler_intrinsic",
+			"strategy": "force_successful_auth",
+			"risk": "high",
+			"bypass_rate_estimate": 0.70
+		},
+		{
+			"id": "kernel_amfi_trustcache",
+			"layer": "kernel",
+			"selector": "kernel::AMFIIsCDHashInTrustCache",
+			"hook_type": "kcall_kwritebuf",
+			"strategy": "write_mov_x0_0_ret",
+			"risk": "critical",
+			"bypass_rate_estimate": 0.99
+		},
+		{
+			"id": "kernel_sandbox_mac_ops",
+			"layer": "kernel",
+			"selector": "kernel::mac_policy_conf.ops[201..316]",
+			"hook_type": "kcall_kwritebuf",
+			"strategy": "patch_to_allow_stub",
+			"risk": "critical",
+			"bypass_rate_estimate": 0.99
+		},
+		{
+			"id": "kernel_csflags_per_process",
+			"layer": "kernel",
+			"selector": "kernel::proc::csflags",
+			"hook_type": "kcall_kwrite64",
+			"strategy": "clear_cs_kill_cs_hard_set_cs_debugged",
+			"risk": "critical",
+			"bypass_rate_estimate": 0.99
+		}
+	],
+	"metadata": {
+		"author": "UltraHide Pro Team",
+		"last_updated": "2026-09-25",
+		"min_dopamine_version": "3.0.0",
+		"min_ios_version": "18.0",
+		"target_devices": ["A8", "A9", "A10", "A11", "A12", "A13"]
+	}
+}

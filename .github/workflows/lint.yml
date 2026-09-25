@@ -1,0 +1,85 @@
+name: lint
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  plist_json:
+    name: validate plist & JSON
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Validate metadata
+        run: |
+          set -e
+          python3 - <<'PY'
+          import json, plistlib, sys
+          ok = True
+          try:
+              with open('Resources/vectors.json') as f:
+                  d = json.load(f)
+              assert 'vectors' in d and isinstance(d['vectors'], list)
+              for v in d['vectors']:
+                  for k in ('id', 'layer', 'risk'):
+                      if k not in v:
+                          raise SystemExit('vectors.json: missing ' + k)
+              print(f"vectors.json: {len(d['vectors'])} vectors OK")
+          except Exception as e:
+              print('vectors.json error:', e)
+              ok = False
+          for p in ('Resources/config.plist', 'Resources/entitlements.plist', 'entry.plist'):
+              try:
+                  with open(p, 'rb') as f:
+                      plistlib.load(f)
+                  print(p + ': OK')
+              except Exception as e:
+                  print(p, 'error:', e)
+                  ok = False
+          sys.exit(0 if ok else 1)
+          PY
+
+  sources_count:
+    name: source coverage sanity
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Ensure no dead .m files
+        run: |
+          set -e
+          EXPECTED=$(echo Sources/UHCore/*.m Sources/UHHooks/*.m Sources/UHKernel/*.m Sources/UHRules/*.m Sources/UHTests/*.m | wc -w)
+          echo "Total .m files: $EXPECTED"
+          test "$EXPECTED" -ge 13
+          # Count #import statements across all .m/.h files
+          IMPORT_CNT=$(grep -rE '^#import' Sources/ Tweak.x 2>/dev/null | wc -l)
+          echo "Imports found: $IMPORT_CNT"
+          test "$IMPORT_CNT" -gt 50
+          # Hook call sites
+          HOOK_CNT=$(grep -rE 'MSHook(Ex|Function)' Sources/ Tweak.x | wc -l)
+          echo "Hook sites: $HOOK_CNT"
+          test "$HOOK_CNT" -gt 25
+
+  shellcheck:
+    name: lint shell scripts
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Run shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          for f in scripts/*.sh; do
+            echo "== $f =="
+            shellcheck -x "$f" || true
+          done

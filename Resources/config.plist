@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>version</key>
+	<string>1.0.0</string>
+
+	<!-- Bundle IDs that get full bypass. If empty -> bypass every process. -->
+	<key>target_apps</key>
+	<array>
+		<string>com.vcb.digibank</string>
+		<string>com.mbbank.mobilebanking</string>
+		<string>com.techcombank.mobile</string>
+		<string>com.vnpay.vntrip</string>
+		<string>com.momo.wallet</string>
+		<string>com.dvia.test</string>
+		<string>org.iac.test</string>
+	</array>
+
+	<!-- Layer toggles. Each one corresponds to one UHHooks module. -->
+	<key>enabled_layers</key>
+	<dict>
+		<key>filesystem</key><true/>
+		<key>process</key><true/>
+		<key>dyld</key><true/>
+		<key>environment</key><true/>
+		<key>sandbox_amfi</key><true/>
+		<key>network_iokit</key><true/>
+		<key>objc_aggregate</key><true/>
+		<key>kernel</key><false/>
+	</dict>
+
+	<!-- Master switch for Lớp 8. Requires no-sandbox entitlement. -->
+	<key>kernel_enabled</key>
+	<false/>
+
+	<!-- Filesystem blacklist. Compared as prefix, case-insensitive. -->
+	<key>blacklist_paths</key>
+	<array>
+		<string>/applications/cydia.app</string>
+		<string>/applications/sileo.app</string>
+		<string>/applications/zebra.app</string>
+		<string>/applications/filza.app</string>
+		<string>/applications/installer.app</string>
+		<string>/applications/blackra1n.app</string>
+		<string>/var/jb</string>
+		<string>/var/jb/</string>
+		<string>/private/preboot/jb</string>
+		<string>/bin/bash</string>
+		<string>/bin/sh</string>
+		<string>/bin/zsh</string>
+		<string>/usr/sbin/sshd</string>
+		<string>/usr/bin/ssh</string>
+		<string>/usr/bin/cycript</string>
+		<string>/etc/apt</string>
+		<string>/usr/lib/tweakinject.dylib</string>
+		<string>/usr/lib/libsubstitute.dylib</string>
+		<string>/usr/lib/substrate</string>
+		<string>/usr/lib/ellekit</string>
+		<string>/.bootstrapped</string>
+		<string>/var/cache/apt</string>
+		<string>/var/lib/dpkg</string>
+		<string>/var/log/syslog</string>
+		<string>/usr/libexec/sftp-server</string>
+		<string>/usr/libexec/ssh-keysign</string>
+		<string>/private/var/stash</string>
+		<string>/private/var/mobile/library/sbsettings</string>
+		<string>/private/var/tmp/cydia.log</string>
+		<string>/library/mobilesubstrate</string>
+	</array>
+
+	<!-- Env vars hidden from target app's getenv. -->
+	<key>blacklist_env_vars</key>
+	<array>
+		<string>dyld_insert_libraries</string>
+		<string>dyld_shared_region</string>
+		<string>dyld_root_path</string>
+		<string>dyld_library_path</string>
+		<string>dyld_fallback_library_path</string>
+		<string>dyld_force_flat_namespace</string>
+		<string>dyld_framework_path</string>
+		<string>_mssafemode</string>
+		<string>mssafemode</string>
+		<string>theosoptflags</string>
+		<string>theos_device_type</string>
+		<string>theos_sdks_path</string>
+		<string>jailbreak_detected</string>
+	</array>
+
+	<!-- URL schemes hidden from -[UIApplication canOpenURL:] and LSApp* APIs. -->
+	<key>blacklist_url_schemes</key>
+	<array>
+		<string>cydia</string>
+		<string>sileo</string>
+		<string>zbra</string>
+		<string>filza</string>
+		<string>undecimus</string>
+		<string>dopamine</string>
+		<string>activator</string>
+		<string>rocketbootstrap</string>
+	</array>
+
+	<!-- Class name regex / prefix list for Lớp 7 (aggregate bypass). -->
+	<key>objc_class_regex_blacklist</key>
+	<array>
+		<string>JailbreakChecker</string>
+		<string>JailbreakDetector</string>
+		<string>IOSSecurity</string>
+		<string>SecurityCheck</string>
+		<string>IntegrityChecker</string>
+		<string>RootDetector</string>
+		<string>DTTJailbreak</string>
+		<string>ATSafety</string>
+		<string>SafetyNet</string>
+		<string>RootKit</string>
+		<string>FRCydia</string>
+		<string>CydiaCompat</string>
+	</array>
+
+	<!-- Selector name regex / prefix list. -->
+	<key>objc_selector_regex_blacklist</key>
+	<array>
+		<string>amIJailbroken</string>
+		<string>isJailbroken</string>
+		<string>amIDebugged</string>
+		<string>isDebugged</string>
+		<string>amIRuntimeHooked</string>
+		<string>amIReverseEngineered</string>
+		<string>amITampered</string>
+		<string>performChecks</string>
+		<string>verifyIntegrity</string>
+		<string>checkIntegrity</string>
+		<string>isSuspicious</string>
+		<string>isCompromised</string>
+	</array>
+
+	<!-- Network interfaces whose name starts with these prefixes are hidden. -->
+	<key>blacklist_interface_prefixes</key>
+	<array>
+		<string>utun</string>
+		<string>ipsec</string>
+	</array>
+
+	<!-- Substrings that must NEVER appear in a process comm string. -->
+	<key>blacklist_process_names</key>
+	<array>
+		<string>cydia</string>
+		<string>sileo</string>
+		<string>zbra</string>
+		<string>filza</string>
+		<string>substrate</string>
+		<string>substitute</string>
+		<string>ultrahidepro</string>
+		<string>sshd</string>
+		<string>dropbear</string>
+		<string>frida</string>
+		<string>cycript</string>
+		<string>inject</string>
+		<string>tweak</string>
+	</array>
+
+	<!-- MobileGestalt keys whose returned value gets sanitized. -->
+	<key>blacklist_mg_keys</key>
+	<array>
+		<string>Jailbroken</string>
+		<string>ChipID</string>
+		<string>TrustCacheValidation</string>
+		<string>SigningFuse</string>
+		<string>HasBaseband</string>
+	</array>
+</dict>
+</plist>

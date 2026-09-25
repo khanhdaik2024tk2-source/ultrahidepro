@@ -1,0 +1,7 @@
+/Sources/   @ultrahidepro/core
+/Sources/UHKernel/   @ultrahidepro/kernel
+/Sources/UHHooks/   @ultrahidepro/hooks
+/Sources/UHRules/   @ultrahidepro/rules
+/Sources/UHTests/   @ultrahidepro/qe
+/Makefile   @ultrahidepro/build
+/.github/   @ultrahidepro/devops
