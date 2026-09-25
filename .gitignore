@@ -14,6 +14,10 @@ _*/
 *.so
 *.dylib
 
+# Secrets / tokens (local helpers only)
+scripts/.token
+scripts/.pat
+
 # Logs
 *.log
 *.log.*
