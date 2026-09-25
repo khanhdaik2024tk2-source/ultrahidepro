@@ -34,6 +34,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)sharedInstance;
 
++ (BOOL)filesystemEnabled;
++ (BOOL)processEnabled;
++ (BOOL)dyldEnabled;
++ (BOOL)environmentEnabled;
++ (BOOL)sandboxAmfiEnabled;
++ (BOOL)networkIOKitEnabled;
++ (BOOL)objcAggregateEnabled;
++ (BOOL)kernelEnabled;
+
 /// Force a reload from disk (used by UHWatchdog).
 - (void)reload;
 

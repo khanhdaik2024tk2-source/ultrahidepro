@@ -122,6 +122,15 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 	return [cfg.targetApps containsObject:bundleID];
 }
 
++ (BOOL)filesystemEnabled { return [self sharedInstance].filesystemEnabled; }
++ (BOOL)processEnabled { return [self sharedInstance].processEnabled; }
++ (BOOL)dyldEnabled { return [self sharedInstance].dyldEnabled; }
++ (BOOL)environmentEnabled { return [self sharedInstance].environmentEnabled; }
++ (BOOL)sandboxAmfiEnabled { return [self sharedInstance].sandboxAmfiEnabled; }
++ (BOOL)networkIOKitEnabled { return [self sharedInstance].networkIOKitEnabled; }
++ (BOOL)objcAggregateEnabled { return [self sharedInstance].objcAggregateEnabled; }
++ (BOOL)kernelEnabled { return [self sharedInstance].kernelEnabled; }
+
 + (BOOL)activeForCurrentApp {
 	UHConfig *cfg = [self sharedInstance];
 	NSString *bid = [self hostBundleID];

@@ -62,7 +62,7 @@ static void UHInit(void) {
 	// Order matters: capture PAC, capture Mach-O, then load config.
 	[UHPAC bootstrap];
 	[UHMachO bootstrap];
-	[UHConfig sharedInstance];
+	UHConfig *cfg = [UHConfig sharedInstance];
 	[UHHookStats sharedInstance];
 
 	// Install BRK guard so multi-tweak BRK#1 recursion can't lurk in
@@ -87,17 +87,17 @@ static void UHInit(void) {
 		return;
 	}
 
-	if ([UHConfig filesystemEnabled])   UHInstallFileSystemHooks();
-	if ([UHConfig processEnabled])      UHInstallProcessHooks();
-	if ([UHConfig dyldEnabled])         UHInstallDyldHooks();
-	if ([UHConfig environmentEnabled])  UHInstallEnvironmentHooks();
-	if ([UHConfig sandboxAmfiEnabled])  UHInstallSandboxAMFIHooks();
-	if ([UHConfig networkIOKitEnabled]) UHInstallNetworkIOKitHooks();
-	if ([UHConfig objcAggregateEnabled]) UHInstallBridgeHooks();
+	if (cfg.filesystemEnabled)   UHInstallFileSystemHooks();
+	if (cfg.processEnabled)      UHInstallProcessHooks();
+	if (cfg.dyldEnabled)         UHInstallDyldHooks();
+	if (cfg.environmentEnabled)  UHInstallEnvironmentHooks();
+	if (cfg.sandboxAmfiEnabled)  UHInstallSandboxAMFIHooks();
+	if (cfg.networkIOKitEnabled) UHInstallNetworkIOKitHooks();
+	if (cfg.objcAggregateEnabled) UHInstallBridgeHooks();
 	UHInstallAntiHookHooks();           // always on
 	UHInstallRuntimeProtectionHooks();  // always on
 
-	if ([UHConfig kernelEnabled]) {
+	if (cfg.kernelEnabled) {
 		if ([UHConfig activeForCurrentApp]) {
 			UHInitKernelPrimitives();
 			UHInstallKernelPatches();
