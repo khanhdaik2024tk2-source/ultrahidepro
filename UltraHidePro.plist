@@ -4,9 +4,9 @@
 <dict>
 	<key>Filter</key>
 	<dict>
-		<key>CoreFoundationVersion</key>
+		<key>Bundles</key>
 		<array>
-			<real>1900.0</real>
+			<string>com.apple.UIKit</string>
 		</array>
 	</dict>
 </dict>

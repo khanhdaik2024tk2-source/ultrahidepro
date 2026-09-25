@@ -33,14 +33,6 @@
 #import <string.h>
 #import <sys/sysctl.h>
 
-extern int kcall(uint64_t *result, uint64_t func, int argc, const uint64_t *argv);
-extern int kexec(void *state);
-extern int kreadbuf(uint64_t kaddr, void *output, size_t size);
-extern int kwritebuf(uint64_t kaddr, const void *input, size_t size);
-extern uint64_t kread64(uint64_t va);
-extern int kwrite64(uint64_t va, uint64_t v);
-extern uint64_t kread_ptr(uint64_t va);
-extern int kwrite_ptr(uint64_t kaddr, uint64_t pointer, uint16_t salt);
 
 typedef int (*kcall_fn_t)(uint64_t *, uint64_t, int, const uint64_t *);
 typedef int (*kreadbuf_fn_t)(uint64_t, void *, size_t);

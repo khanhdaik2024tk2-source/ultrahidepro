@@ -132,10 +132,9 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 + (BOOL)kernelEnabled { return [self sharedInstance].kernelEnabled; }
 
 + (BOOL)activeForCurrentApp {
-	UHConfig *cfg = [self sharedInstance];
 	NSString *bid = [self hostBundleID];
 	if (bid.length == 0) return NO;
-	if (![self isTargetApp:bid]) return NO;
+
 	static NSSet<NSString *> *denyList;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
@@ -149,10 +148,18 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 			@"com.apple.runningboard",
 			@"com.apple.frontboard",
 			@"com.apple.biokitd",
+			@"com.apple.Preferences",
 			@"com.apple.dt.xcode.debugger",
+			@"org.coolstar.SileoStore",
+			@"org.coolstar.SileoNightly",
+			@"xyz.willy.Zebra",
+			@"com.tigisoftware.Filza",
 		]];
 	});
 	if ([denyList containsObject:bid]) return NO;
+	if (![self isTargetApp:bid]) return NO;
+
+	UHConfig *cfg = [self sharedInstance];
 	return (cfg.filesystemEnabled || cfg.processEnabled ||
 	        cfg.dyldEnabled        || cfg.environmentEnabled ||
 	        cfg.sandboxAmfiEnabled || cfg.networkIOKitEnabled ||

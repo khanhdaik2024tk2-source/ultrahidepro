@@ -1,4 +1,6 @@
 #import <Foundation/Foundation.h>
+#import <stdlib.h>
+#import <string.h>
 #import <substrate.h>
 
 #import "UHCore/UHConfig.h"
@@ -40,10 +42,22 @@
 __attribute__((constructor))
 static void UHInit(void) {
 	// Zero-Risk Safe Mode Guard:
-	// Only activate inside target applications.
-	// If the current process is SpringBoard, backboardd, a system daemon, or
-	// not in target_apps, immediately bail out before doing ANY work
-	// (no signal handlers, no hooks, no memory scans).
+	// 1. Instant C-level fast path: SpringBoard, backboardd, daemons, and jailbreak apps must NEVER run UltraHidePro
+	const char *progname = getprogname();
+	if (progname != NULL) {
+		if (strcmp(progname, "SpringBoard") == 0 ||
+		    strcmp(progname, "backboardd") == 0 ||
+		    strcmp(progname, "launchd") == 0 ||
+		    strcmp(progname, "runningboardd") == 0 ||
+		    strcmp(progname, "Preferences") == 0 ||
+		    strcmp(progname, "Sileo") == 0 ||
+		    strcmp(progname, "Zebra") == 0 ||
+		    strcmp(progname, "Filza") == 0) {
+			return;
+		}
+	}
+
+	// 2. Per-app bundle guard: only activate if this app is configured in target_apps.
 	if (![UHConfig activeForCurrentApp]) {
 		return;
 	}

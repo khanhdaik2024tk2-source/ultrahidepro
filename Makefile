@@ -32,20 +32,7 @@ UltraHidePro_CFLAGS = -fobjc-arc \
                       -Wno-unused-function
 endif
 
-# Linker: leave kcall/kexec/kreadbuf/kwritebuf unresolved at link time; the
-# symbols are resolved by libjailbreak.dylib at runtime (which is loaded
-# before our constructor runs thanks to DYLD_INSERT_LIBRARIES ordering).
-UltraHidePro_LDFLAGS = -Wl,-U,_kcall \
-                       -Wl,-U,_kexec \
-                       -Wl,-U,_kreadbuf \
-                       -Wl,-U,_kwritebuf \
-                       -Wl,-U,_kread64 \
-                       -Wl,-U,_kwrite64 \
-                       -Wl,-U,_kread_ptr \
-                       -Wl,-U,_kwrite_ptr \
-                       -Wl,-U,_kalloc \
-                       -Wl,-U,_kfree \
-                       -lsubstrate
+UltraHidePro_LDFLAGS = -lsubstrate
 
 UltraHidePro_FRAMEWORKS = Foundation CoreFoundation Security IOKit
 
