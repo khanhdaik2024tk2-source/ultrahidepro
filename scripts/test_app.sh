@@ -30,16 +30,16 @@ echo "[+] Extracting dylib for smoke test"
 mkdir -p "$BUILD_DIR"
 dpkg-deb -x "$DEB_FILE" "$BUILD_DIR/installed"
 
-if [[ ! -f "$BUILD_DIR/installed/Library/Frameworks/UltraHidePro.framework/UltraHidePro" && \
-      ! -f "$BUILD_DIR/installed/var/jb/usr/lib/UltraHidePro/UltraHidePro.dylib" ]]; then
-  echo "[!] Could not find installed dylib"
-  find "$BUILD_DIR/installed" -name "UltraHidePro*"
+DYLIB=$(find "$BUILD_DIR/installed" \( -name "UltraHidePro*.dylib" -o -name "UltraHidePro" \) -type f | head -n1)
+if [[ -z "$DYLIB" || ! -f "$DYLIB" ]]; then
+  echo "[!] Could not find installed dylib in $BUILD_DIR/installed"
+  find "$BUILD_DIR/installed"
   exit 1
 fi
+echo "[+] Found installed dylib: $DYLIB"
 
 echo "[+] Verifying code signature placeholder"
 LDID=${LDID:-ldid}
-DYLIB=$(find "$BUILD_DIR/installed" -name "UltraHidePro*" -type f | head -n1)
 "$LDID" -e "$DYLIB" || true
 
 echo "[+] Build verification complete"

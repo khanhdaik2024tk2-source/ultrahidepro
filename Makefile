@@ -37,8 +37,6 @@ UltraHidePro_LDFLAGS = -Wl,-U,_kcall \
                        -Wl,-U,_kwrite_ptr \
                        -Wl,-U,_kalloc \
                        -Wl,-U,_kfree \
-                       -lellekit \
-                       -ljailbreak \
                        -lsubstrate
 
 UltraHidePro_FRAMEWORKS = Foundation CoreFoundation Security IOKit
@@ -59,8 +57,10 @@ UltraHidePro_FILES = Tweak.x \
 include $(THEOS)/makefiles/tweak.mk
 
 internal-package::
+	mkdir -p $(THEOS_STAGING_DIR)/DEBIAN
 	cp control $(THEOS_STAGING_DIR)/DEBIAN/control
-	cp entry.plist $(THEOS_STAGING_DIR)/Library/Frameworks/UltraHidePro.framework/Info.plist 2>/dev/null || true
+	mkdir -p $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries
+	cp entry.plist $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries/UltraHidePro.plist 2>/dev/null || true
 	mkdir -p $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro
 	cp Resources/config.plist $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro/config.plist || true
 	cp Resources/vectors.json $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro/vectors.json || true
