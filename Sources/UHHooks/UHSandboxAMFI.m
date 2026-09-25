@@ -8,7 +8,11 @@
 #import <Security/Security.h>
 #import <dlfcn.h>
 #import <sandbox.h>
+#if __has_include(<xpc/xpc.h>)
 #import <xpc/xpc.h>
+#else
+typedef void *xpc_connection_t;
+#endif
 #import <stdint.h>
 
 #pragma mark - sandbox_check
@@ -125,7 +129,9 @@ static xpc_connection_t $xpc_connection_create(const char *name, dispatch_queue_
 			static xpc_connection_t sDummy = NULL;
 			static dispatch_once_t once;
 			dispatch_once(&once, ^{
-				sDummy = xpc_connection_create(NULL, NULL);
+				if (_orig_xpc_connection_create != NULL) {
+					sDummy = _orig_xpc_connection_create(NULL, NULL);
+				}
 			});
 			return sDummy;
 		}
@@ -181,10 +187,13 @@ void UHInstallSandboxAMFIHooks(void) {
 		[stats bumpBy:1];
 	}
 
-	MSHookFunction((void *)xpc_connection_create,
-		(void *)$xpc_connection_create,
-		(void **)&_orig_xpc_connection_create);
-	[stats bumpBy:1];
+	void *xcc = dlsym(RTLD_DEFAULT, "xpc_connection_create");
+	if (xcc != NULL) {
+		MSHookFunction(xcc,
+			(void *)$xpc_connection_create,
+			(void **)&_orig_xpc_connection_create);
+		[stats bumpBy:1];
+	}
 
 	UHLogInfoF(@"sandbox/AMFI hooks installed (%lu total)",
 		(unsigned long)(stats.activeCount - before));

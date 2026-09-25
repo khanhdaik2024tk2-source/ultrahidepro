@@ -113,6 +113,7 @@ static int UH_Kwrite(uint64_t addr, const void *buf, size_t size) {
 	return gKwritebuf(addr, buf, size);
 }
 
+static int UH_Kread(uint64_t addr, void *buf, size_t size) __attribute__((unused));
 static int UH_Kread(uint64_t addr, void *buf, size_t size) {
 	if (!gReady || gKreadbuf == NULL) return -1;
 	return gKreadbuf(addr, buf, size);
@@ -135,6 +136,7 @@ static int UH_KwriteSafe(uint64_t addr, const void *buf, size_t size) {
 	return UH_Kwrite(addr, buf, size);
 }
 
+static int UH_Kwrite32(uint64_t addr, uint32_t value) __attribute__((unused));
 static int UH_Kwrite32(uint64_t addr, uint32_t value) {
 	return UH_KwriteSafe(addr, &value, sizeof(value));
 }

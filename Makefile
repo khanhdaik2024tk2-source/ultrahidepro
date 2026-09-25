@@ -17,6 +17,7 @@ UltraHidePro_CFLAGS = -fobjc-arc \
                       -Wno-deprecated-declarations \
                       -Wno-unused-parameter \
                       -Wno-unused-variable \
+                      -Wno-unused-function \
                       -Werror=implicit-function-declaration \
                       -Werror=return-type \
                       -Wall
@@ -27,7 +28,8 @@ UltraHidePro_CFLAGS = -fobjc-arc \
                       -I$(THEOS_PROJECT_DIR)/Sources \
                       -Wno-deprecated-declarations \
                       -Wno-unused-parameter \
-                      -Wno-unused-variable
+                      -Wno-unused-variable \
+                      -Wno-unused-function
 endif
 
 # Linker: leave kcall/kexec/kreadbuf/kwritebuf unresolved at link time; the
