@@ -12,6 +12,7 @@ FINALPACKAGE = 1
 ifeq ($(analyze),1)
 UltraHidePro_CFLAGS = -fobjc-arc \
                       -fno-modules \
+                      -std=gnu11 \
                       -I$(THEOS_PROJECT_DIR)/Sources \
                       -Wno-deprecated-declarations \
                       -Wno-unused-parameter \
@@ -21,6 +22,7 @@ UltraHidePro_CFLAGS = -fobjc-arc \
 else
 UltraHidePro_CFLAGS = -fobjc-arc \
                       -fno-modules \
+                      -std=gnu11 \
                       -I$(THEOS_PROJECT_DIR)/Sources \
                       -Wno-deprecated-declarations \
                       -Wno-unused-parameter

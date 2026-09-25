@@ -1,5 +1,6 @@
 #import "UHPAC.h"
 #import <mach-o/loader.h>
+#import <mach-o/dyld.h>
 #import <string.h>
 
 // We compute the answer once on bootstrap by inspecting the host's

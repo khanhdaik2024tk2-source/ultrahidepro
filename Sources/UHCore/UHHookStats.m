@@ -1,8 +1,8 @@
 #import "UHHookStats.h"
-#import <stdatomic.h>
+#import <stdint.h>
 
 @implementation UHHookStats {
-	atomic_size_t _count;
+	volatile int64_t _count;
 }
 
 + (instancetype)sharedInstance {
@@ -14,22 +14,22 @@
 
 - (instancetype)init {
 	if ((self = [super init])) {
-		atomic_init(&_count, 0);
+		_count = 0;
 	}
 	return self;
 }
 
 - (NSUInteger)activeCount {
-	return atomic_load_explicit(&_count, memory_order_relaxed);
+	return (NSUInteger)__sync_fetch_and_add(&_count, 0);
 }
 
 - (void)bumpBy:(NSUInteger)delta {
 	if (delta == 0) return;
-	atomic_fetch_add_explicit(&_count, delta, memory_order_relaxed);
+	__sync_fetch_and_add(&_count, (int64_t)delta);
 }
 
 - (void)reset {
-	atomic_store_explicit(&_count, 0, memory_order_relaxed);
+	__sync_lock_test_and_set(&_count, 0);
 }
 
 @end

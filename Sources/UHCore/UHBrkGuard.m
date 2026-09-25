@@ -6,7 +6,6 @@
 #import <Foundation/Foundation.h>
 #import <signal.h>
 #import <pthread.h>
-#import <stdatomic.h>
 #import <os/log.h>
 #import <mach-o/loader.h>
 
@@ -16,15 +15,13 @@
 
 static struct sigaction gOldSigtrap;
 static struct sigaction gOldSigbus;
-static atomic_int gInstallCount = 0;
+static volatile int gInstallCount = 0;
 
 static void UH_BrkDumpState(int sig, siginfo_t *info, ucontext_t *ctx) {
 #if defined(__arm64__) || defined(__arm64e__)
 	uint64_t pc = 0;
-	if (ctx != NULL) {
-#if defined(__darwin__) && defined(UC_MCONTEXT) && defined(UC_MCONTEXT arm64)
+	if (ctx != NULL && ctx->uc_mcontext != NULL) {
 		pc = (uint64_t)ctx->uc_mcontext->__ss.__pc;
-#endif
 	}
 	UHLogErrorF(@"BRK guard: signal=%d at PC=0x%llx (ElleKit trampoline recursion suspected)",
 		sig, (unsigned long long)pc);
@@ -50,7 +47,7 @@ static void UH_BrkHandler(int sig, siginfo_t *info, void *uap) {
 }
 
 void UHInstallBrkGuard(void) {
-	if (atomic_fetch_add(&gInstallCount, 1) > 0) return;
+	if (__sync_fetch_and_add(&gInstallCount, 1) > 0) return;
 #if defined(__arm64__) && !defined(__arm64e__)
 	if ([UHPAC isPACAvailable]) {
 		// On arm64e skip — BRK conflicts with PAC traps.
@@ -68,7 +65,7 @@ void UHInstallBrkGuard(void) {
 }
 
 void UHUninstallBrkGuard(void) {
-	if (atomic_fetch_sub(&gInstallCount, 1) != 1) return;
+	if (__sync_fetch_and_sub(&gInstallCount, 1) != 1) return;
 #if defined(__arm64__) && !defined(__arm64e__)
 	sigaction(SIGTRAP, &gOldSigtrap, NULL);
 	sigaction(SIGBUS,   &gOldSigbus,   NULL);
