@@ -23,17 +23,8 @@ typedef int (*sandbox_check_t)(pid_t, const char *, int);
 static sandbox_check_t _orig_sandbox_check = NULL;
 
 static int $sandbox_check(pid_t pid, const char *operation, int filter_type) {
-	// If the operation is one of the few sandbox verbs that gate access to
-	// jailbreak-related paths, return 0 (allowed).
-	if (operation != NULL) {
-		NSString *op = [NSString stringWithUTF8String:operation];
-		NSString *l = [op lowercaseString];
-		if ([l containsString:@"file-write"] ||
-		    [l containsString:@"file-read"] ||
-		    [l containsString:@"process-exec"]) {
-			return 0;
-		}
-	}
+	// Let standard sandbox checks enforce confinement; never falsely report that
+	// file-write or process-exec is allowed outside sandbox.
 	if (_orig_sandbox_check != NULL) {
 		return _orig_sandbox_check(pid, operation, filter_type);
 	}

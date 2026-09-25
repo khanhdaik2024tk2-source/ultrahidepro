@@ -98,21 +98,29 @@ static int $sysctl(int *name, u_int namelen,
 	// otherwise the cost of iterating the proc buffer would be paid
 	// by system daemons for no benefit.
 	if ([UHConfig activeForCurrentApp] &&
-	    namelen >= 2 && name[0] == CTL_KERN &&
-	    (name[1] == KERN_PROC || name[1] == KERN_PROC_ALL)) {
-		size_t sz = oldlenp ? *oldlenp : 0;
-		if (sz == 0) return rc;
-		size_t recSize = sizeof(struct kinfo_proc);
-		size_t count = sz / recSize;
-		struct kinfo_proc *procs = (struct kinfo_proc *)oldp;
-		size_t writeIdx = 0;
-		for (size_t i = 0; i < count; i++) {
-			const char *comm = procs[i].kp_proc.p_comm;
-			if (![UHConfig shouldHideProcessName:comm]) {
-				procs[writeIdx++] = procs[i];
+	    namelen >= 2 && name[0] == CTL_KERN) {
+		if (name[1] == KERN_PROC_PID && oldp != NULL && oldlenp && *oldlenp >= sizeof(struct kinfo_proc)) {
+			// Clear P_TRACED flag used by anti-debug detection
+			#ifndef P_TRACED
+			#define P_TRACED 0x00000800
+			#endif
+			struct kinfo_proc *p = (struct kinfo_proc *)oldp;
+			p->kp_proc.p_flag &= ~P_TRACED;
+		} else if (name[1] == KERN_PROC || name[1] == KERN_PROC_ALL) {
+			size_t sz = oldlenp ? *oldlenp : 0;
+			if (sz == 0) return rc;
+			size_t recSize = sizeof(struct kinfo_proc);
+			size_t count = sz / recSize;
+			struct kinfo_proc *procs = (struct kinfo_proc *)oldp;
+			size_t writeIdx = 0;
+			for (size_t i = 0; i < count; i++) {
+				const char *comm = procs[i].kp_proc.p_comm;
+				if (![UHConfig shouldHideProcessName:comm]) {
+					procs[writeIdx++] = procs[i];
+				}
 			}
+			if (oldlenp) *oldlenp = writeIdx * recSize;
 		}
-		if (oldlenp) *oldlenp = writeIdx * recSize;
 	}
 	return rc;
 }
@@ -249,6 +257,47 @@ static int $csops(pid_t pid, unsigned int op, void *buffer, size_t size) {
 	return rc;
 }
 
+#pragma mark - Anti-Tamper Kill Interception (exit, _exit, abort)
+
+typedef void (*exit_t)(int);
+static exit_t _orig_exit = NULL;
+static void $exit(int status) {
+	if ([UHConfig activeForCurrentApp]) {
+		UHLogErrorF(@"[UltraHidePro] Intercepted anti-tamper exit(%d)", status);
+		if (![NSThread isMainThread]) {
+			pthread_exit(NULL);
+			return;
+		}
+	}
+	if (_orig_exit) _orig_exit(status);
+}
+
+typedef void (*_exit_t)(int);
+static _exit_t _orig__exit = NULL;
+static void $_exit(int status) {
+	if ([UHConfig activeForCurrentApp]) {
+		UHLogErrorF(@"[UltraHidePro] Intercepted anti-tamper _exit(%d)", status);
+		if (![NSThread isMainThread]) {
+			pthread_exit(NULL);
+			return;
+		}
+	}
+	if (_orig__exit) _orig__exit(status);
+}
+
+typedef void (*abort_t)(void);
+static abort_t _orig_abort = NULL;
+static void $abort(void) {
+	if ([UHConfig activeForCurrentApp]) {
+		UHLogErrorF(@"[UltraHidePro] Intercepted anti-tamper abort()");
+		if (![NSThread isMainThread]) {
+			pthread_exit(NULL);
+			return;
+		}
+	}
+	if (_orig_abort) _orig_abort();
+}
+
 #pragma mark - Installer
 
 void UHInstallProcessHooks(void) {
@@ -274,6 +323,24 @@ void UHInstallProcessHooks(void) {
 	void *fn_csops = dlsym(RTLD_DEFAULT, "csops");
 	if (fn_csops != NULL) {
 		MSHookFunction(fn_csops, (void *)$csops, (void **)&_orig_csops);
+		[stats bumpBy:1];
+	}
+
+	void *fn_exit = dlsym(RTLD_DEFAULT, "exit");
+	if (fn_exit != NULL) {
+		MSHookFunction(fn_exit, (void *)$exit, (void **)&_orig_exit);
+		[stats bumpBy:1];
+	}
+
+	void *fn__exit = dlsym(RTLD_DEFAULT, "_exit");
+	if (fn__exit != NULL) {
+		MSHookFunction(fn__exit, (void *)$_exit, (void **)&_orig__exit);
+		[stats bumpBy:1];
+	}
+
+	void *fn_abort = dlsym(RTLD_DEFAULT, "abort");
+	if (fn_abort != NULL) {
+		MSHookFunction(fn_abort, (void *)$abort, (void **)&_orig_abort);
 		[stats bumpBy:1];
 	}
 

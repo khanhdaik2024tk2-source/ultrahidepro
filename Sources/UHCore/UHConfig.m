@@ -119,7 +119,20 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 	if (bundleID.length == 0) return NO;
 	UHConfig *cfg = [self sharedInstance];
 	if (cfg.targetApps.count == 0) return YES;
-	return [cfg.targetApps containsObject:bundleID];
+	for (NSString *target in cfg.targetApps) {
+		if ([bundleID caseInsensitiveCompare:target] == NSOrderedSame) return YES;
+	}
+	// Fallback auto-detection for popular banking apps if bundleID variants differ
+	NSString *lower = [bundleID lowercaseString];
+	if ([lower containsString:@"mbbank"] ||
+	    [lower containsString:@"mbmobile"] ||
+	    [lower isEqualToString:@"com.mb.mbbank"] ||
+	    [lower containsString:@"techcombank"] ||
+	    [lower containsString:@"digibank"] ||
+	    [lower containsString:@"vcb"]) {
+		return YES;
+	}
+	return NO;
 }
 
 + (BOOL)filesystemEnabled { return [self sharedInstance].filesystemEnabled; }
@@ -190,6 +203,31 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 	NSString *lower = [scheme lowercaseString];
 	for (NSString *blk in [self sharedInstance].blacklistURLSchemes) {
 		if ([lower isEqualToString:blk]) return YES;
+	}
+	return NO;
+}
+
++ (BOOL)shouldBlockBundleID:(NSString *)bundleID {
+	if (bundleID.length == 0) return NO;
+	NSString *lower = [bundleID lowercaseString];
+	static NSArray<NSString *> *jbBundles;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		jbBundles = @[
+			@"org.coolstar.sileostore",
+			@"org.coolstar.sileonightly",
+			@"xyz.willy.zebra",
+			@"com.tigisoftware.filza",
+			@"org.cydia.cydia",
+			@"com.saurik.cydia",
+			@"com.opa334.dopamine",
+			@"com.opa334.trollstore",
+			@"com.ultrahidepro.app",
+			@"com.rileytestut.altstore",
+		];
+	});
+	for (NSString *jb in jbBundles) {
+		if ([lower isEqualToString:jb] || [lower hasPrefix:jb]) return YES;
 	}
 	return NO;
 }

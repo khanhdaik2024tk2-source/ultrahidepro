@@ -60,6 +60,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// URL scheme blacklist — case-insensitive equality.
 + (BOOL)shouldBlockURLScheme:(NSString *)scheme;
 
+/// Jailbreak app bundle identifier blacklist (e.g. Sileo, Zebra, Filza).
++ (BOOL)shouldBlockBundleID:(NSString *)bundleID;
+
 /// Returns YES if the class name matches the regex blacklist. Tries prefix
 /// match first (fast path) and falls back to NSRegularExpression when needed.
 + (BOOL)shouldHookObjCClass:(const char *)className;

@@ -49,8 +49,6 @@ static char *$secure_getenv(const char *name) {
 
 #pragma mark - __system_property_get
 
-// __system_property_get has its own calling convention on iOS — it returns
-// the length of the value copied into `value`.
 typedef int (*system_property_get_t)(const char *, char *);
 static system_property_get_t _orig_system_property_get = NULL;
 
@@ -62,7 +60,6 @@ static int $system_property_get(const char *name, char *value) {
 		    [n hasPrefix:@"ro.debuggable"] ||
 		    [n hasPrefix:@"ro.secure"] ||
 		    [n hasPrefix:@"service.adb.root"]) {
-			// Return empty string.
 			if (value != NULL && rc < (int)NAME_MAX) {
 				value[0] = '\0';
 				return 0;
@@ -85,26 +82,59 @@ static BOOL $canOpenURL_(id self, SEL _cmd, NSURL *url) {
 	return _orig_canOpenURL_(self, _cmd, url);
 }
 
-#pragma mark - LSApplicationWorkspace applicationIsInstalled:
+#pragma mark - LSApplicationWorkspace
 
-// LSApplicationWorkspace is a private class; we resolve it lazily and only
-// install the hook if it exists in the host process.
 static BOOL (*_orig_lsaw_appIsInstalled_)(id, SEL, NSString *) = NULL;
 
 static BOOL $lsaw_appIsInstalled_(id self, SEL _cmd, NSString *bundleID) {
-	if (UH_UNLIKELY(bundleID != nil && [UHConfig shouldBlockURLScheme:bundleID])) {
+	if (UH_UNLIKELY(bundleID != nil &&
+	    ([UHConfig shouldBlockBundleID:bundleID] || [UHConfig shouldBlockURLScheme:bundleID]))) {
 		return NO;
 	}
 	return _orig_lsaw_appIsInstalled_(self, _cmd, bundleID);
 }
 
-// LSApplicationProxy is the underlying class used by canOpenURL.
 static BOOL (*_orig_lsap_appIsInstalled_)(id, SEL, NSString *) = NULL;
 static BOOL $lsap_appIsInstalled_(id self, SEL _cmd, NSString *bundleID) {
-	if (UH_UNLIKELY(bundleID != nil && [UHConfig shouldBlockURLScheme:bundleID])) {
+	if (UH_UNLIKELY(bundleID != nil &&
+	    ([UHConfig shouldBlockBundleID:bundleID] || [UHConfig shouldBlockURLScheme:bundleID]))) {
 		return NO;
 	}
 	return _orig_lsap_appIsInstalled_(self, _cmd, bundleID);
+}
+
+static NSArray *(*_orig_lsaw_allApplications)(id, SEL) = NULL;
+static NSArray *$lsaw_allApplications(id self, SEL _cmd) {
+	NSArray *apps = _orig_lsaw_allApplications(self, _cmd);
+	if (!apps || ![UHConfig activeForCurrentApp]) return apps;
+	NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:apps.count];
+	for (id app in apps) {
+		if ([app respondsToSelector:@selector(bundleIdentifier)]) {
+			NSString *bid = [app performSelector:@selector(bundleIdentifier)];
+			if (bid != nil && [UHConfig shouldBlockBundleID:bid]) {
+				continue;
+			}
+		}
+		[filtered addObject:app];
+	}
+	return [filtered copy];
+}
+
+static NSArray *(*_orig_lsaw_allInstalledApplications)(id, SEL) = NULL;
+static NSArray *$lsaw_allInstalledApplications(id self, SEL _cmd) {
+	NSArray *apps = _orig_lsaw_allInstalledApplications(self, _cmd);
+	if (!apps || ![UHConfig activeForCurrentApp]) return apps;
+	NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:apps.count];
+	for (id app in apps) {
+		if ([app respondsToSelector:@selector(bundleIdentifier)]) {
+			NSString *bid = [app performSelector:@selector(bundleIdentifier)];
+			if (bid != nil && [UHConfig shouldBlockBundleID:bid]) {
+				continue;
+			}
+		}
+		[filtered addObject:app];
+	}
+	return [filtered copy];
 }
 
 #pragma mark - Installer
@@ -122,7 +152,6 @@ void UHInstallEnvironmentHooks(void) {
 		MSHookFunction(sec_getenv, (void *)$secure_getenv, (void **)&_orig_secure_getenv);
 		[stats bumpBy:1];
 	}
-	// __system_property_get is exported from libsystem_c.dylib.
 	void *spg = dlsym(RTLD_DEFAULT, "__system_property_get");
 	if (spg != NULL) {
 		MSHookFunction(spg, (void *)$system_property_get, (void **)&_orig_system_property_get);
@@ -140,7 +169,11 @@ void UHInstallEnvironmentHooks(void) {
 	if (lsaw != NULL) {
 		MSHookMessageEx(lsaw, @selector(applicationIsInstalled:),
 			(IMP)$lsaw_appIsInstalled_, (IMP *)&_orig_lsaw_appIsInstalled_);
-		[stats bumpBy:1];
+		MSHookMessageEx(lsaw, @selector(allApplications),
+			(IMP)$lsaw_allApplications, (IMP *)&_orig_lsaw_allApplications);
+		MSHookMessageEx(lsaw, @selector(allInstalledApplications),
+			(IMP)$lsaw_allInstalledApplications, (IMP *)&_orig_lsaw_allInstalledApplications);
+		[stats bumpBy:3];
 	}
 	Class lsap = NSClassFromString(@"LSApplicationProxy");
 	if (lsap != NULL) {

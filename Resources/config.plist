@@ -3,13 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>version</key>
-	<string>1.0.0</string>
+	<string>1.1.2</string>
 
 	<!-- Bundle IDs that get full bypass. If empty -> bypass every process. -->
 	<key>target_apps</key>
 	<array>
-		<string>com.vcb.digibank</string>
+		<string>com.mb.mbbank</string>
+		<string>vn.com.mbbank.mb.ios</string>
 		<string>com.mbbank.mobilebanking</string>
+		<string>com.mbmobile</string>
+		<string>com.mb.mbprivate</string>
+		<string>com.vcb.digibank</string>
 		<string>com.techcombank.mobile</string>
 		<string>com.vnpay.vntrip</string>
 		<string>com.momo.wallet</string>
@@ -43,9 +47,11 @@
 		<string>/applications/filza.app</string>
 		<string>/applications/installer.app</string>
 		<string>/applications/blackra1n.app</string>
+		<string>/applications/ultrahidepro.app</string>
 		<string>/var/jb</string>
 		<string>/var/jb/</string>
-		<string>/private/preboot/jb</string>
+		<string>/private/preboot</string>
+		<string>/private/preboot/</string>
 		<string>/bin/bash</string>
 		<string>/bin/sh</string>
 		<string>/bin/zsh</string>
@@ -66,6 +72,10 @@
 		<string>/var/lib/cydia</string>
 		<string>/var/binpack</string>
 		<string>/var/log/syslog</string>
+		<string>/var/log/apt</string>
+		<string>/var/log/dpkg</string>
+		<string>/var/run/jb</string>
+		<string>/var/dropbear</string>
 		<string>/usr/libexec/sftp-server</string>
 		<string>/usr/libexec/ssh-keysign</string>
 		<string>/private/var/stash</string>
@@ -81,6 +91,13 @@
 		<string>/jb</string>
 		<string>/basebin</string>
 		<string>/cores/binpack</string>
+		<string>/var/mobile/library/preferences/com.opa334.</string>
+		<string>/var/mobile/library/preferences/com.ultrahidepro.</string>
+		<string>/var/mobile/library/preferences/org.coolstar.</string>
+		<string>/var/mobile/library/preferences/xyz.willy.</string>
+		<string>/var/mobile/library/preferences/com.tigisoftware.</string>
+		<string>/var/mobile/library/caches/com.opa334.</string>
+		<string>/var/mobile/library/caches/com.ultrahidepro.</string>
 	</array>
 
 	<!-- Env vars hidden from target app's getenv. -->
@@ -112,6 +129,9 @@
 		<string>dopamine</string>
 		<string>activator</string>
 		<string>rocketbootstrap</string>
+		<string>santander</string>
+		<string>postbox</string>
+		<string>ssh</string>
 	</array>
 
 	<!-- Class name regex / prefix list for Lớp 7 (aggregate bypass). -->

@@ -18,9 +18,6 @@
 typedef uint32_t (*dyld_image_count_t)(void);
 static dyld_image_count_t _orig_dyld_image_count = NULL;
 
-// Number of tweaks that we've decided to hide. Set by UHAntiHook too;
-// kept here because the original hook of _dyld_image_count lives in this
-// file as a "first-line" defense.
 static uint32_t gHiddenImageDelta = 0;
 
 void UHDyldSetHiddenImageDelta(uint32_t delta) { gHiddenImageDelta = delta; }
@@ -38,8 +35,6 @@ static uint32_t $dyld_image_count(void) {
 typedef const char *(*dyld_get_image_name_t)(uint32_t);
 static dyld_get_image_name_t _orig_dyld_get_image_name = NULL;
 
-// Returned to the caller when the requested index is one of our hidden
-// tweaks. Cached so we don't allocate per call.
 static const char *gDisguisedNamePtr = NULL;
 
 static const char *$dyld_get_image_name(uint32_t index) {
@@ -68,14 +63,8 @@ static void *$dlopen(const char *path, int mode) {
 	return _orig_dlopen(path, mode);
 }
 
-// dlopen_from has a third LR argument on iOS 14+. We can hook the public
-// symbol `dlopen` and rely on Apple's own dlopen routing inside dyld for
-// most callers. If we need finer control later we add a second hook here.
-
 #pragma mark - dlsym
 
-// UHAntiHook interplays with this file: anti-hook components must NOT
-// see our tweak's symbols under any handle they pull through dlsym.
 static bool UHDyldIsHiddenSymbolPrefix(const char *symbol) {
 	if (symbol == NULL) return false;
 	if (symbol[0] == '_') symbol++; // Mach-O leading underscore.
@@ -85,6 +74,8 @@ static bool UHDyldIsHiddenSymbolPrefix(const char *symbol) {
 		"MSHookMessageEx",
 		"ultrahidepro_",
 		"UltraHidePro_",
+		"ellekit",
+		"ElleKit",
 		NULL,
 	};
 	for (size_t i = 0; prefixes[i] != NULL; i++) {
@@ -111,6 +102,59 @@ static void *$dlsym(void *handle, const char *symbol) {
 	return _orig_dlsym(handle, symbol);
 }
 
+#pragma mark - dladdr
+
+typedef int (*dladdr_t)(const void *, Dl_info *);
+static dladdr_t _orig_dladdr = NULL;
+
+static int $dladdr(const void *addr, Dl_info *info) {
+	int rc = _orig_dladdr(addr, info);
+	if (rc != 0 && info != NULL && info->dli_fname != NULL) {
+		if (UH_UNLIKELY([UHMachO isTweakPath:info->dli_fname])) {
+			info->dli_fname = "/usr/lib/system/libsystem_c.dylib";
+			info->dli_sname = "strlen";
+		}
+	}
+	return rc;
+}
+
+#pragma mark - _dyld_register_func_for_add_image
+
+typedef void (*dyld_image_callback_t)(const struct mach_header *, intptr_t);
+typedef void (*dyld_register_func_for_add_image_t)(dyld_image_callback_t);
+static dyld_register_func_for_add_image_t _orig_dyld_register_func_for_add_image = NULL;
+
+static dyld_image_callback_t gAppAddImageCallbacks[16];
+static size_t gAppAddImageCallbackCount = 0;
+
+static void UHAddImageCallbackDispatcher(const struct mach_header *mh, intptr_t vmaddr_slide) {
+	if (mh == NULL) return;
+	Dl_info info;
+	if (dladdr((const void *)mh, &info) != 0 && info.dli_fname != NULL) {
+		if ([UHMachO isTweakPath:info.dli_fname]) {
+			// Suppress tweak images from detection callbacks
+			return;
+		}
+	}
+	for (size_t i = 0; i < gAppAddImageCallbackCount; i++) {
+		if (gAppAddImageCallbacks[i] != NULL) {
+			gAppAddImageCallbacks[i](mh, vmaddr_slide);
+		}
+	}
+}
+
+static void $dyld_register_func_for_add_image(dyld_image_callback_t func) {
+	if (func == NULL) return;
+	if (gAppAddImageCallbackCount < 16) {
+		gAppAddImageCallbacks[gAppAddImageCallbackCount++] = func;
+		if (gAppAddImageCallbackCount == 1 && _orig_dyld_register_func_for_add_image != NULL) {
+			_orig_dyld_register_func_for_add_image(UHAddImageCallbackDispatcher);
+		}
+	} else if (_orig_dyld_register_func_for_add_image != NULL) {
+		_orig_dyld_register_func_for_add_image(func);
+	}
+}
+
 #pragma mark - Installer
 
 void UHInstallDyldHooks(void) {
@@ -129,7 +173,13 @@ void UHInstallDyldHooks(void) {
 	MSHookFunction((void *)dlsym,
 	               (void *)$dlsym,
 	               (void **)&_orig_dlsym);
-	[stats bumpBy:4];
+	MSHookFunction((void *)dladdr,
+	               (void *)$dladdr,
+	               (void **)&_orig_dladdr);
+	MSHookFunction((void *)_dyld_register_func_for_add_image,
+	               (void *)$dyld_register_func_for_add_image,
+	               (void **)&_orig_dyld_register_func_for_add_image);
+	[stats bumpBy:6];
 
 	UHLogInfoF(@"dyld hooks installed (%lu total)",
 		(unsigned long)(stats.activeCount - before));

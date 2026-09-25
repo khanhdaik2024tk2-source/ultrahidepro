@@ -95,6 +95,15 @@
 			}
 		}
 	}
+	if (self.enabledBundleIDs.count == 0) {
+		[self.enabledBundleIDs addObjectsFromArray:@[
+			@"com.mb.mbbank",
+			@"vn.com.mbbank.mb.ios",
+			@"com.mbbank.mobilebanking",
+			@"com.vcb.digibank",
+			@"com.techcombank.mobile"
+		]];
+	}
 }
 
 - (void)saveConfiguration {

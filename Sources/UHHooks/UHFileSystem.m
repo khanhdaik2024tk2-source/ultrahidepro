@@ -16,28 +16,34 @@
 #import <errno.h>
 #import <string.h>
 #import <limits.h>
+#import <dlfcn.h>
 
 #pragma mark - Common helpers
 
-// Mirror of UHConfig::shouldBlockPath for the C-level hooks (which can't
-// easily call back into Objective-C). The blacklist is already loaded into
-// the UHConfig singleton so we just forward.
 static inline bool UHPathBlocked(const char *path) {
 	if (path == NULL) return false;
 	NSString *s = [NSString stringWithUTF8String:path];
+	if (s == nil) return false;
 	return [UHConfig shouldBlockPath:s];
 }
 
 #pragma mark - NSFileManager hooks (Objective-C)
 
-// Original IMPs.
 static BOOL (*_orig_NSFileManager_fileExistsAtPath_)(id, SEL, NSString *) = NULL;
 static BOOL (*_orig_NSFileManager_fileExistsAtPath_isDirectory_)(id, SEL, NSString *, BOOL *) = NULL;
 static NSDictionary *(*_orig_NSFileManager_attributesOfItemAtPath_error_)(id, SEL, NSString *, NSError **) = NULL;
+static BOOL (*_orig_NSFileManager_createFileAtPath_contents_attributes_)(id, SEL, NSString *, NSData *, NSDictionary *) = NULL;
+static NSArray *(*_orig_NSFileManager_contentsOfDirectoryAtPath_error_)(id, SEL, NSString *, NSError **) = NULL;
+static NSArray *(*_orig_NSFileManager_contentsOfDirectoryAtURL_includingPropertiesForKeys_options_error_)(id, SEL, NSURL *, NSArray *, NSUInteger, NSError **) = NULL;
+static NSArray *(*_orig_NSFileManager_subpathsAtPath_)(id, SEL, NSString *) = NULL;
+static NSString *(*_orig_NSFileManager_destinationOfSymbolicLinkAtPath_error_)(id, SEL, NSString *, NSError **) = NULL;
+static BOOL (*_orig_NSFileManager_isReadableFileAtPath_)(id, SEL, NSString *) = NULL;
+static BOOL (*_orig_NSFileManager_isWritableFileAtPath_)(id, SEL, NSString *) = NULL;
+static BOOL (*_orig_NSFileManager_isExecutableFileAtPath_)(id, SEL, NSString *) = NULL;
+static BOOL (*_orig_NSFileManager_isDeletableFileAtPath_)(id, SEL, NSString *) = NULL;
 
 static BOOL $NSFileManager_fileExistsAtPath_(id self, SEL _cmd, NSString *path) {
 	if (UH_UNLIKELY([UHConfig shouldBlockPath:path])) {
-		UHLogDebugF(@"NSFileManager.fileExistsAtPath: blocked %@", path);
 		return NO;
 	}
 	return _orig_NSFileManager_fileExistsAtPath_(self, _cmd, path);
@@ -65,7 +71,6 @@ static NSDictionary *$NSFileManager_attributesOfItemAtPath_error_(id self, SEL _
 	return _orig_NSFileManager_attributesOfItemAtPath_error_(self, _cmd, path, error);
 }
 
-static BOOL (*_orig_NSFileManager_createFileAtPath_contents_attributes_)(id, SEL, NSString *, NSData *, NSDictionary *) = NULL;
 static BOOL $NSFileManager_createFileAtPath_contents_attributes_(id self, SEL _cmd,
 	NSString *path, NSData *data, NSDictionary *attr) {
 	if (UH_UNLIKELY(path != nil && [UHConfig shouldBlockPath:path])) {
@@ -74,9 +79,92 @@ static BOOL $NSFileManager_createFileAtPath_contents_attributes_(id self, SEL _c
 	return _orig_NSFileManager_createFileAtPath_contents_attributes_(self, _cmd, path, data, attr);
 }
 
-#pragma mark - libc hooks (fishhook-style via MSHookFunction)
+static NSArray *$NSFileManager_contentsOfDirectoryAtPath_error_(id self, SEL _cmd,
+	NSString *path, NSError **error) {
+	if (UH_UNLIKELY([UHConfig shouldBlockPath:path])) {
+		if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoSuchFileError userInfo:nil];
+		return nil;
+	}
+	NSArray *items = _orig_NSFileManager_contentsOfDirectoryAtPath_error_(self, _cmd, path, error);
+	if (!items || ![UHConfig activeForCurrentApp]) return items;
+	NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:items.count];
+	for (NSString *item in items) {
+		NSString *full = [path stringByAppendingPathComponent:item];
+		if ([path isEqualToString:@"/var"] && [item isEqualToString:@"jb"]) continue;
+		if ([path isEqualToString:@"/private/var"] && [item isEqualToString:@"jb"]) continue;
+		if ([UHConfig shouldBlockPath:full]) continue;
+		[filtered addObject:item];
+	}
+	return [filtered copy];
+}
 
-// fopen
+static NSArray *$NSFileManager_contentsOfDirectoryAtURL_includingPropertiesForKeys_options_error_(id self, SEL _cmd,
+	NSURL *url, NSArray *keys, NSUInteger mask, NSError **error) {
+	if (UH_UNLIKELY(url != nil && [UHConfig shouldBlockPath:url.path])) {
+		if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoSuchFileError userInfo:nil];
+		return nil;
+	}
+	NSArray *items = _orig_NSFileManager_contentsOfDirectoryAtURL_includingPropertiesForKeys_options_error_(self, _cmd, url, keys, mask, error);
+	if (!items || ![UHConfig activeForCurrentApp]) return items;
+	NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:items.count];
+	for (NSURL *u in items) {
+		if (u.path != nil && [UHConfig shouldBlockPath:u.path]) continue;
+		[filtered addObject:u];
+	}
+	return [filtered copy];
+}
+
+static NSArray *$NSFileManager_subpathsAtPath_(id self, SEL _cmd, NSString *path) {
+	if (UH_UNLIKELY([UHConfig shouldBlockPath:path])) return nil;
+	NSArray *items = _orig_NSFileManager_subpathsAtPath_(self, _cmd, path);
+	if (!items || ![UHConfig activeForCurrentApp]) return items;
+	NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:items.count];
+	for (NSString *sub in items) {
+		NSString *full = [path stringByAppendingPathComponent:sub];
+		if ([UHConfig shouldBlockPath:full]) continue;
+		[filtered addObject:sub];
+	}
+	return [filtered copy];
+}
+
+static NSString *$NSFileManager_destinationOfSymbolicLinkAtPath_error_(id self, SEL _cmd,
+	NSString *path, NSError **error) {
+	if (UH_UNLIKELY([UHConfig shouldBlockPath:path])) {
+		if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoSuchFileError userInfo:nil];
+		return nil;
+	}
+	NSString *dest = _orig_NSFileManager_destinationOfSymbolicLinkAtPath_error_(self, _cmd, path, error);
+	if (dest != nil && [UHConfig shouldBlockPath:dest]) {
+		if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoSuchFileError userInfo:nil];
+		return nil;
+	}
+	return dest;
+}
+
+static BOOL $NSFileManager_isReadableFileAtPath_(id self, SEL _cmd, NSString *path) {
+	if (UH_UNLIKELY([UHConfig shouldBlockPath:path])) return NO;
+	return _orig_NSFileManager_isReadableFileAtPath_(self, _cmd, path);
+}
+
+static BOOL $NSFileManager_isWritableFileAtPath_(id self, SEL _cmd, NSString *path) {
+	if (UH_UNLIKELY([UHConfig shouldBlockPath:path])) return NO;
+	// Block write probe to root or /private
+	if (path != nil && ([path isEqualToString:@"/private"] || [path isEqualToString:@"/"])) return NO;
+	return _orig_NSFileManager_isWritableFileAtPath_(self, _cmd, path);
+}
+
+static BOOL $NSFileManager_isExecutableFileAtPath_(id self, SEL _cmd, NSString *path) {
+	if (UH_UNLIKELY([UHConfig shouldBlockPath:path])) return NO;
+	return _orig_NSFileManager_isExecutableFileAtPath_(self, _cmd, path);
+}
+
+static BOOL $NSFileManager_isDeletableFileAtPath_(id self, SEL _cmd, NSString *path) {
+	if (UH_UNLIKELY([UHConfig shouldBlockPath:path])) return NO;
+	return _orig_NSFileManager_isDeletableFileAtPath_(self, _cmd, path);
+}
+
+#pragma mark - libc hooks
+
 typedef FILE *(*fopen_t)(const char *, const char *);
 static fopen_t _orig_fopen = NULL;
 static FILE *$fopen(const char *path, const char *mode) {
@@ -87,7 +175,6 @@ static FILE *$fopen(const char *path, const char *mode) {
 	return _orig_fopen(path, mode);
 }
 
-// open
 typedef int (*open_t)(const char *, int, ...);
 static open_t _orig_open = NULL;
 static int $open(const char *path, int flags, ...) {
@@ -106,7 +193,24 @@ static int $open(const char *path, int flags, ...) {
 	return _orig_open(path, flags);
 }
 
-// stat / lstat
+typedef int (*openat_t)(int, const char *, int, ...);
+static openat_t _orig_openat = NULL;
+static int $openat(int fd, const char *path, int flags, ...) {
+	mode_t mode = 0;
+	if (flags & O_CREAT) {
+		va_list ap;
+		va_start(ap, flags);
+		mode = va_arg(ap, int);
+		va_end(ap);
+	}
+	if (UH_UNLIKELY(UHPathBlocked(path))) {
+		errno = ENOENT;
+		return -1;
+	}
+	if (flags & O_CREAT) return _orig_openat(fd, path, flags, mode);
+	return _orig_openat(fd, path, flags);
+}
+
 typedef int (*stat_t)(const char *, struct stat *);
 static stat_t _orig_stat = NULL;
 static int $stat(const char *path, struct stat *buf) {
@@ -121,7 +225,13 @@ static int $lstat(const char *path, struct stat *buf) {
 	return _orig_lstat(path, buf);
 }
 
-// access
+typedef int (*fstatat_t)(int, const char *, struct stat *, int);
+static fstatat_t _orig_fstatat = NULL;
+static int $fstatat(int fd, const char *path, struct stat *buf, int flag) {
+	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
+	return _orig_fstatat(fd, path, buf, flag);
+}
+
 typedef int (*access_t)(const char *, int);
 static access_t _orig_access = NULL;
 static int $access(const char *path, int mode) {
@@ -129,7 +239,39 @@ static int $access(const char *path, int mode) {
 	return _orig_access(path, mode);
 }
 
-// opendir
+typedef int (*faccessat_t)(int, const char *, int, int);
+static faccessat_t _orig_faccessat = NULL;
+static int $faccessat(int fd, const char *path, int mode, int flag) {
+	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
+	return _orig_faccessat(fd, path, mode, flag);
+}
+
+typedef ssize_t (*readlink_t)(const char *, char *, size_t);
+static readlink_t _orig_readlink = NULL;
+static ssize_t $readlink(const char *path, char *buf, size_t bufsiz) {
+	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
+	return _orig_readlink(path, buf, bufsiz);
+}
+
+typedef ssize_t (*readlinkat_t)(int, const char *, char *, size_t);
+static readlinkat_t _orig_readlinkat = NULL;
+static ssize_t $readlinkat(int fd, const char *path, char *buf, size_t bufsiz) {
+	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
+	return _orig_readlinkat(fd, path, buf, bufsiz);
+}
+
+typedef char *(*realpath_t)(const char *, char *);
+static realpath_t _orig_realpath = NULL;
+static char *$realpath(const char *path, char *resolved_path) {
+	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return NULL; }
+	char *res = _orig_realpath(path, resolved_path);
+	if (res != NULL && UHPathBlocked(res)) {
+		errno = ENOENT;
+		return NULL;
+	}
+	return res;
+}
+
 typedef DIR *(*opendir_t)(const char *);
 static opendir_t _orig_opendir = NULL;
 static DIR *$opendir(const char *path) {
@@ -137,30 +279,12 @@ static DIR *$opendir(const char *path) {
 	return _orig_opendir(path);
 }
 
-// readdir — filter blacklisted entries from inside allowed directories.
-// We MUST avoid recursion: a recursive call site is not safe because:
-//
-//   1. On iOS 18 the fused file system can hand back the same dirent in
-//      certain edge cases (e.g. some jailbreak symlinks), causing us to
-//      loop forever and blow the stack.
-//   2. fcntl(F_GETPATH) on a DIR* is documented as an "unsupported" BSD
-//      extension; iOS 18.6.2 returns ENOTSUP for some FDs opened by
-//      libsystem's getdirentries so we cannot rely on it.
-//
-// We therefore:
-//   * Cache the parent path the first time we see it for a given DIR*.
-//     That cache is keyed on the DIR* pointer itself; entries are
-//     released lazily and the table is small.
-//   * Iterate with a hard upper bound (UH_READDIR_MAX_ITER) so a runaway
-//     filesystem can't take the process down.
 typedef struct dirent *(*readdir_t)(DIR *);
 static readdir_t _orig_readdir = NULL;
 
-// Hash-table of recently-seen DIR* → parent-path. Tiny (16 buckets) is
-// more than enough because UHHook callers re-open, not re-seek.
 typedef struct {
 	DIR *key;
-	const char *parent; // heap-allocated, never freed (process lifetime)
+	const char *parent;
 } UHReadDirEntry;
 
 #define UH_READDIR_BUCKETS 16
@@ -176,29 +300,26 @@ static const char *UHReadDirRememberParent(DIR *dirp) {
 	int fd = dirfd(dirp);
 	char path[PATH_MAX] = {0};
 	if (fd >= 0) {
-		// fcntl(F_GETPATH) is the only API that returns the real VFS
-		// path for an FD on Darwin. On iOS 18 some FDs return -1 with
-		// ENOTSUP — fall back to the original (less precise) "no parent"
-		// semantics instead of skipping every entry.
 		if (fcntl(fd, F_GETPATH, path) != 0) return NULL;
 	}
-	if (e->parent != NULL) {
-		// Stale entry — overwrite.
-	}
 	e->key = dirp;
-	e->parent = strdup(path); // process-lifetime leak; bounded by 16.
+	e->parent = strdup(path);
 	return e->parent;
 }
 
 static bool UHReadDirIsParentBlacklisted(const char *parent) {
 	if (parent == NULL || parent[0] == '\0') return false;
-	// Hard list of paths inside which we'll filter entries.
-	// Compared case-sensitive because /Applications is canonical.
+	if (strcmp(parent, "/var") == 0) return true;
+	if (strcmp(parent, "/private/var") == 0) return true;
+	if (strcmp(parent, "/private/preboot") == 0) return true;
+	if (strcmp(parent, "/") == 0) return true;
 	if (strcmp(parent, "/Applications") == 0) return true;
 	if (strcmp(parent, "/var/jb/Applications") == 0) return true;
 	if (strcmp(parent, "/var/jb/usr/lib") == 0) return true;
 	if (strcmp(parent, "/var/jb/Library") == 0) return true;
 	if (strcmp(parent, "/Library") == 0) return true;
+	if (strstr(parent, "Library/Preferences") != NULL) return true;
+	if (strstr(parent, "Library/Caches") != NULL) return true;
 	return false;
 }
 
@@ -210,27 +331,30 @@ static struct dirent *$readdir(DIR *dirp) {
 	for (int iter = 0; iter < UH_READDIR_MAX_ITER; iter++) {
 		struct dirent *e = _orig_readdir(dirp);
 		if (e == NULL) return NULL;
-		// Reject dotted entries early so . and .. always pass.
 		if (e->d_name[0] == '.') {
 			if (e->d_name[1] == '\0' ||
 			    (e->d_name[1] == '.' && e->d_name[2] == '\0')) {
 				return e;
 			}
 		}
-		NSString *full = [NSString stringWithFormat:@"%s/%s", parent, e->d_name];
+		if (parent != NULL) {
+			if ((strcmp(parent, "/var") == 0 || strcmp(parent, "/private/var") == 0) &&
+			    strcmp(e->d_name, "jb") == 0) {
+				continue;
+			}
+			if (strcmp(parent, "/private/preboot") == 0 &&
+			    (strstr(e->d_name, "dopamine") != NULL || strstr(e->d_name, "jb") != NULL)) {
+				continue;
+			}
+		}
+		NSString *full = [NSString stringWithFormat:@"%s/%s", parent ?: "", e->d_name];
 		if (![UHConfig shouldBlockPath:full]) {
 			return e;
 		}
-		// Otherwise loop and ask for the next entry.
 	}
-	UHLogWarnF(@"readdir: iteration cap reached under %s; bailing out", parent);
 	return NULL;
 }
 
-// NSBundle +bundleWithPath:/-bundleWithURL: are commonly used to detect
-// jailbreak helper bundles by probing whether the app can "see" them.
-// We hook the API here because the implementation lives alongside the
-// other NSFileManager/NSBundle detection vectors.
 static id (*_orig_NSBundle_bundleWithPath_)(id, SEL, NSString *) = NULL;
 static id (*_orig_NSBundle_bundleWithURL_)(id, SEL, NSURL *) = NULL;
 
@@ -254,47 +378,70 @@ void UHInstallFileSystemHooks(void) {
 	UHHookStats *stats = [UHHookStats sharedInstance];
 	NSUInteger before = stats.activeCount;
 
-	// Objective-C hooks (3)
 	Class fm = NSClassFromString(@"NSFileManager");
 	if (fm != NULL) {
-		MSHookMessageEx(fm,
-			@selector(fileExistsAtPath:),
-			(IMP)$NSFileManager_fileExistsAtPath_,
-			(IMP *)&_orig_NSFileManager_fileExistsAtPath_);
-		MSHookMessageEx(fm,
-			@selector(fileExistsAtPath:isDirectory:),
-			(IMP)$NSFileManager_fileExistsAtPath_isDirectory_,
-			(IMP *)&_orig_NSFileManager_fileExistsAtPath_isDirectory_);
-		MSHookMessageEx(fm,
-			@selector(attributesOfItemAtPath:error:),
-			(IMP)$NSFileManager_attributesOfItemAtPath_error_,
-			(IMP *)&_orig_NSFileManager_attributesOfItemAtPath_error_);
-		MSHookMessageEx(fm,
-			@selector(createFileAtPath:contents:attributes:),
-			(IMP)$NSFileManager_createFileAtPath_contents_attributes_,
-			(IMP *)&_orig_NSFileManager_createFileAtPath_contents_attributes_);
-		[stats bumpBy:4];
+		MSHookMessageEx(fm, @selector(fileExistsAtPath:),
+			(IMP)$NSFileManager_fileExistsAtPath_, (IMP *)&_orig_NSFileManager_fileExistsAtPath_);
+		MSHookMessageEx(fm, @selector(fileExistsAtPath:isDirectory:),
+			(IMP)$NSFileManager_fileExistsAtPath_isDirectory_, (IMP *)&_orig_NSFileManager_fileExistsAtPath_isDirectory_);
+		MSHookMessageEx(fm, @selector(attributesOfItemAtPath:error:),
+			(IMP)$NSFileManager_attributesOfItemAtPath_error_, (IMP *)&_orig_NSFileManager_attributesOfItemAtPath_error_);
+		MSHookMessageEx(fm, @selector(createFileAtPath:contents:attributes:),
+			(IMP)$NSFileManager_createFileAtPath_contents_attributes_, (IMP *)&_orig_NSFileManager_createFileAtPath_contents_attributes_);
+		MSHookMessageEx(fm, @selector(contentsOfDirectoryAtPath:error:),
+			(IMP)$NSFileManager_contentsOfDirectoryAtPath_error_, (IMP *)&_orig_NSFileManager_contentsOfDirectoryAtPath_error_);
+		MSHookMessageEx(fm, @selector(contentsOfDirectoryAtURL:includingPropertiesForKeys:options:error:),
+			(IMP)$NSFileManager_contentsOfDirectoryAtURL_includingPropertiesForKeys_options_error_, (IMP *)&_orig_NSFileManager_contentsOfDirectoryAtURL_includingPropertiesForKeys_options_error_);
+		MSHookMessageEx(fm, @selector(subpathsAtPath:),
+			(IMP)$NSFileManager_subpathsAtPath_, (IMP *)&_orig_NSFileManager_subpathsAtPath_);
+		MSHookMessageEx(fm, @selector(destinationOfSymbolicLinkAtPath:error:),
+			(IMP)$NSFileManager_destinationOfSymbolicLinkAtPath_error_, (IMP *)&_orig_NSFileManager_destinationOfSymbolicLinkAtPath_error_);
+		MSHookMessageEx(fm, @selector(isReadableFileAtPath:),
+			(IMP)$NSFileManager_isReadableFileAtPath_, (IMP *)&_orig_NSFileManager_isReadableFileAtPath_);
+		MSHookMessageEx(fm, @selector(isWritableFileAtPath:),
+			(IMP)$NSFileManager_isWritableFileAtPath_, (IMP *)&_orig_NSFileManager_isWritableFileAtPath_);
+		MSHookMessageEx(fm, @selector(isExecutableFileAtPath:),
+			(IMP)$NSFileManager_isExecutableFileAtPath_, (IMP *)&_orig_NSFileManager_isExecutableFileAtPath_);
+		MSHookMessageEx(fm, @selector(isDeletableFileAtPath:),
+			(IMP)$NSFileManager_isDeletableFileAtPath_, (IMP *)&_orig_NSFileManager_isDeletableFileAtPath_);
+		[stats bumpBy:12];
 	}
 
-	// libc hooks via ElleKit / substrate.
-	MSHookFunction((void *)fopen,   (void *)$fopen,   (void **)&_orig_fopen);
-	MSHookFunction((void *)open,    (void *)$open,    (void **)&_orig_open);
-	MSHookFunction((void *)stat,    (void *)$stat,    (void **)&_orig_stat);
-	MSHookFunction((void *)lstat,   (void *)$lstat,   (void **)&_orig_lstat);
-	MSHookFunction((void *)access,  (void *)$access,  (void **)&_orig_access);
-	MSHookFunction((void *)opendir, (void *)$opendir, (void **)&_orig_opendir);
-	MSHookFunction((void *)readdir, (void *)$readdir, (void **)&_orig_readdir);
-	[stats bumpBy:7];
+	MSHookFunction((void *)fopen,      (void *)$fopen,      (void **)&_orig_fopen);
+	MSHookFunction((void *)open,       (void *)$open,       (void **)&_orig_open);
+	MSHookFunction((void *)openat,     (void *)$openat,     (void **)&_orig_openat);
+	MSHookFunction((void *)stat,       (void *)$stat,       (void **)&_orig_stat);
+	MSHookFunction((void *)lstat,      (void *)$lstat,      (void **)&_orig_lstat);
+	MSHookFunction((void *)fstatat,    (void *)$fstatat,    (void **)&_orig_fstatat);
+	MSHookFunction((void *)access,     (void *)$access,     (void **)&_orig_access);
+	MSHookFunction((void *)faccessat,  (void *)$faccessat,  (void **)&_orig_faccessat);
+	MSHookFunction((void *)readlink,   (void *)$readlink,   (void **)&_orig_readlink);
+	MSHookFunction((void *)readlinkat, (void *)$readlinkat, (void **)&_orig_readlinkat);
+	MSHookFunction((void *)realpath,   (void *)$realpath,   (void **)&_orig_realpath);
+	MSHookFunction((void *)opendir,    (void *)$opendir,    (void **)&_orig_opendir);
+	MSHookFunction((void *)readdir,    (void *)$readdir,    (void **)&_orig_readdir);
+	[stats bumpBy:13];
 
-	// NSBundle detection-vector hooks.
+	// INODE64 / 64-bit stat variants
+	void *fn_stat64 = dlsym(RTLD_DEFAULT, "stat64");
+	if (fn_stat64 != NULL && fn_stat64 != (void *)stat) {
+		stat_t _orig_s64 = NULL;
+		MSHookFunction(fn_stat64, (void *)$stat, (void **)&_orig_s64);
+		[stats bumpBy:1];
+	}
+	void *fn_lstat64 = dlsym(RTLD_DEFAULT, "lstat64");
+	if (fn_lstat64 != NULL && fn_lstat64 != (void *)lstat) {
+		lstat_t _orig_ls64 = NULL;
+		MSHookFunction(fn_lstat64, (void *)$lstat, (void **)&_orig_ls64);
+		[stats bumpBy:1];
+	}
+
 	Class bundleCls = NSClassFromString(@"NSBundle");
 	if (bundleCls != NULL) {
 		MSHookMessageEx(bundleCls, @selector(bundleWithPath:),
-			(IMP)$NSBundle_bundleWithPath_,
-			(IMP *)&_orig_NSBundle_bundleWithPath_);
+			(IMP)$NSBundle_bundleWithPath_, (IMP *)&_orig_NSBundle_bundleWithPath_);
 		MSHookMessageEx(bundleCls, @selector(bundleWithURL:),
-			(IMP)$NSBundle_bundleWithURL_,
-			(IMP *)&_orig_NSBundle_bundleWithURL_);
+			(IMP)$NSBundle_bundleWithURL_, (IMP *)&_orig_NSBundle_bundleWithURL_);
 		[stats bumpBy:2];
 	}
 

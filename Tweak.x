@@ -23,22 +23,7 @@
 #import "UHKernel/UHKcall.h"
 #import "UHRules/UHRuleLoader.h"
 
-// Constructor — runs as soon as the tweak dylib finishes loading. The
-// ordering is critical:
-//
-//   1) UHPAC bootstrap     : capture CPU type so guard macros are sane.
-//   2) UHMachO bootstrap    : query the precise __TEXT range BEFORE we
-//                             install any hooks that call back into the
-//                             dyld API. This avoids a chicken-and-egg
-//                             problem where the very hooks we install
-//                             would otherwise see a "filtered" view of
-//                             themselves.
-//   3) UHConfig singleton   : load the plist (read-only from here on).
-//   4) hook installers     : each layer short-circuits when not active.
-//   5) rule loader          : tail-end so it may override decisions.
-//
-// We also defensively skip the entire tweak if it's being loaded into a
-// process that should never host a hide-tweak (SpringBoard stays healthy).
+// Constructor — runs as soon as the tweak dylib finishes loading.
 __attribute__((constructor))
 static void UHInit(void) {
 	// Zero-Risk Safe Mode Guard:
@@ -52,7 +37,8 @@ static void UHInit(void) {
 		    strcmp(progname, "Preferences") == 0 ||
 		    strcmp(progname, "Sileo") == 0 ||
 		    strcmp(progname, "Zebra") == 0 ||
-		    strcmp(progname, "Filza") == 0) {
+		    strcmp(progname, "Filza") == 0 ||
+		    strcmp(progname, "UltraHidePro") == 0) {
 			return;
 		}
 	}
@@ -62,7 +48,7 @@ static void UHInit(void) {
 		return;
 	}
 
-	UHLogInfo(@"UltraHide Pro v1.0.0 booting for %@", [UHConfig hostBundleID]);
+	UHLogInfo(@"UltraHide Pro v1.1.2 booting for %@", [UHConfig hostBundleID]);
 
 	// Order matters: capture PAC, capture Mach-O, then load config.
 	[UHPAC bootstrap];
@@ -78,14 +64,12 @@ static void UHInit(void) {
 	if (cfg.networkIOKitEnabled) UHInstallNetworkIOKitHooks();
 	if (cfg.objcAggregateEnabled) UHInstallBridgeHooks();
 	UHInstallAntiHookHooks();           // always on
+	UHInstallRuntimeProtectionHooks();  // always on
 
 	if (cfg.kernelEnabled) {
 		UHInitKernelPrimitives();
 		UHInstallKernelPatches();
 	}
-
-	// Dynamic rules last, so they can override defaults installed above.
-	[[UHRuleLoader sharedInstance] activate];
 
 	NSUInteger activeCount = [UHHookStats sharedInstance].activeCount;
 	UHLogInfo(@"UltraHide Pro loaded with %lu active hooks", (unsigned long)activeCount);
