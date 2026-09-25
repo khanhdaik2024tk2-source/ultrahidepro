@@ -59,14 +59,46 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 
 - (void)load {
 	_loadedPath = UHConfigResolvePath();
-	UHLogInfoF(@"Loading config from %@", _loadedPath);
 	NSDictionary *cfg = [NSDictionary dictionaryWithContentsOfFile:_loadedPath];
 	if (cfg == nil) {
-		UHLogWarnF(@"Config not found at %@ — using safe defaults", _loadedPath);
+		cfg = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.ultrahidepro.plist"];
+	}
+	if (cfg == nil) {
+		cfg = [NSDictionary dictionaryWithContentsOfFile:@"/var/jb/var/mobile/Library/Preferences/com.ultrahidepro.plist"];
+	}
+	if (cfg == nil) {
 		cfg = @{};
 	}
 
-	_targetApps               = UHConfigCopyStrings(cfg[@"target_apps"]);
+	// 1. Try CFPreferences / cfprefsd (crucial for sandboxed apps on Dopamine rootless!)
+	NSArray *targetsFromPrefs = nil;
+	CFArrayRef cfTargets = (CFArrayRef)CFPreferencesCopyAppValue(CFSTR("target_apps"), CFSTR("com.ultrahidepro"));
+	if (cfTargets != NULL) {
+		if (CFGetTypeID(cfTargets) == CFArrayGetTypeID()) {
+			targetsFromPrefs = [(__bridge NSArray *)cfTargets copy];
+		}
+		CFRelease(cfTargets);
+	}
+
+	if (targetsFromPrefs.count > 0) {
+		_targetApps = UHConfigCopyStrings(targetsFromPrefs);
+	} else if (cfg[@"target_apps"] != nil && [cfg[@"target_apps"] count] > 0) {
+		_targetApps = UHConfigCopyStrings(cfg[@"target_apps"]);
+	} else {
+		// Out-of-the-box protection list for popular banking & sensitive apps
+		_targetApps = @[
+			@"com.mb.mbbank",
+			@"vn.com.mbbank.mb.ios",
+			@"com.mbbank.mobilebanking",
+			@"com.mbmobile",
+			@"com.mb.mbprivate",
+			@"com.vcb.digibank",
+			@"com.techcombank.mobile",
+			@"com.vnpay.vntrip",
+			@"com.momo.wallet"
+		];
+	}
+
 	_blacklistPaths           = UHConfigNormaliseStrings(cfg[@"blacklist_paths"]);
 	_blacklistEnvVars         = UHConfigNormaliseStrings(cfg[@"blacklist_env_vars"]);
 	_blacklistURLSchemes      = UHConfigNormaliseStrings(cfg[@"blacklist_url_schemes"]);
@@ -79,25 +111,16 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 	NSDictionary *layers = cfg[@"enabled_layers"];
 	if (![layers isKindOfClass:[NSDictionary class]]) layers = @{};
 
-	_filesystemEnabled   = [layers[@"filesystem"] boolValue];
-	_processEnabled      = [layers[@"process"] boolValue];
-	_dyldEnabled         = [layers[@"dyld"] boolValue];
-	_environmentEnabled  = [layers[@"environment"] boolValue];
-	_sandboxAmfiEnabled  = [layers[@"sandbox_amfi"] boolValue];
+	_filesystemEnabled   = layers[@"filesystem"] ? [layers[@"filesystem"] boolValue] : YES;
+	_processEnabled      = layers[@"process"] ? [layers[@"process"] boolValue] : YES;
+	_dyldEnabled         = layers[@"dyld"] ? [layers[@"dyld"] boolValue] : YES;
+	_environmentEnabled  = layers[@"environment"] ? [layers[@"environment"] boolValue] : YES;
+	_sandboxAmfiEnabled  = layers[@"sandbox_amfi"] ? [layers[@"sandbox_amfi"] boolValue] : YES;
 	_networkIOKitEnabled = [layers[@"network_iokit"] boolValue];
 	_objcAggregateEnabled= [layers[@"objc_aggregate"] boolValue];
+	_kernelEnabled       = NO;
 
-	// Kernel layer is gated by BOTH the master switch and the per-layer switch.
-	_kernelEnabled       = [layers[@"kernel"] boolValue] &&
-	                       [cfg[@"kernel_enabled"] boolValue];
-
-	if (_targetApps.count == 0) {
-		UHLogWarnF(@"target_apps is empty — running in catch-all mode");
-	}
-
-	UHLogInfoF(@"Config layers: fs=%d proc=%d dyld=%d env=%d sbamfi=%d net=%d objc=%d kern=%d",
-		_filesystemEnabled, _processEnabled, _dyldEnabled, _environmentEnabled,
-		_sandboxAmfiEnabled, _networkIOKitEnabled, _objcAggregateEnabled, _kernelEnabled);
+	UHLogInfoF(@"Config loaded: %lu target apps", (unsigned long)_targetApps.count);
 }
 
 - (void)reload {
@@ -107,10 +130,19 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 - (NSString *)configPath { return _loadedPath; }
 
 + (NSString *)hostBundleID {
-	static NSString *cached;
+	static NSString *cached = nil;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
-		cached = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
+		CFBundleRef mainBundle = CFBundleGetMainBundle();
+		if (mainBundle != NULL) {
+			CFStringRef cfBid = CFBundleGetIdentifier(mainBundle);
+			if (cfBid != NULL) {
+				cached = [(__bridge NSString *)cfBid copy];
+			}
+		}
+		if (cached == nil || cached.length == 0) {
+			cached = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
+		}
 	});
 	return cached;
 }
@@ -141,10 +173,6 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 	static NSSet<NSString *> *denyList;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
-		// System services use fork(), bootstrap helpers, etc. Forcing
-		// our hooks here would corrupt SpringBoard / backboardd and
-		// brick the UI. We refuse to install them in those processes
-		// from UHInit; this is the runtime check mirror.
 		denyList = [NSSet setWithArray:@[
 			@"com.apple.springboard",
 			@"com.apple.backboardd",
@@ -157,55 +185,33 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 			@"org.coolstar.SileoNightly",
 			@"xyz.willy.Zebra",
 			@"com.tigisoftware.Filza",
+			@"com.ultrahidepro.app"
 		]];
 	});
 	if ([denyList containsObject:bid]) return NO;
-	if (![self isTargetApp:bid]) return NO;
-
-	UHConfig *cfg = [self sharedInstance];
-	return (cfg.filesystemEnabled || cfg.processEnabled ||
-	        cfg.dyldEnabled        || cfg.environmentEnabled ||
-	        cfg.sandboxAmfiEnabled || cfg.networkIOKitEnabled ||
-	        cfg.objcAggregateEnabled);
+	return [self isTargetApp:bid];
 }
 
 + (BOOL)shouldBlockPath:(NSString *)path {
 	if (path.length == 0) return NO;
-	NSString *lower = [path lowercaseString];
+	const char *cpath = [path UTF8String];
+	if (cpath == NULL) return NO;
 
-	// Allow UltraHidePro internal config loading
-	if ([lower hasSuffix:@"ultrahidepro/config.plist"]) return NO;
-
-	// Dopamine rootless bootstrap stored in /private/preboot/<UUID>/dopamine... or .../jb...
-	if ([lower hasPrefix:@"/private/preboot/"]) {
-		if ([lower containsString:@"dopamine"] || [lower containsString:@"/jb"]) {
-			return YES;
-		}
-		// Do NOT block Cryptexes or other system preboot paths!
+	// Fast-path: sandbox containers and system paths (99.9% of app calls)
+	if (strncmp(cpath, "/private/var/containers/", 24) == 0 ||
+	    strncmp(cpath, "/var/containers/", 16) == 0 ||
+	    strncmp(cpath, "/private/var/mobile/Containers/", 31) == 0 ||
+	    strncmp(cpath, "/var/mobile/Containers/", 23) == 0 ||
+	    strncmp(cpath, "/System/", 8) == 0) {
 		return NO;
 	}
 
+	if (UHPathBlockedFast(cpath)) return YES;
+
+	NSString *lower = [path lowercaseString];
 	NSArray<NSString *> *blist = [self sharedInstance].blacklistPaths;
 	for (NSString *blk in blist) {
 		if ([lower hasPrefix:blk]) return YES;
-	}
-
-	// Handle /private symlink aliases for /var, /etc, /tmp
-	NSString *alias = nil;
-	if ([lower hasPrefix:@"/private/var/"] ||
-	    [lower hasPrefix:@"/private/etc/"] ||
-	    [lower hasPrefix:@"/private/tmp/"]) {
-		alias = [lower substringFromIndex:8]; // "/var/...", "/etc/...", "/tmp/..."
-	} else if ([lower hasPrefix:@"/var/"] ||
-	           [lower hasPrefix:@"/etc/"] ||
-	           [lower hasPrefix:@"/tmp/"]) {
-		alias = [@"/private" stringByAppendingString:lower];
-	}
-
-	if (alias != nil) {
-		for (NSString *blk in blist) {
-			if ([alias hasPrefix:blk]) return YES;
-		}
 	}
 
 	return NO;

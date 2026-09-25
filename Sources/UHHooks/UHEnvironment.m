@@ -8,25 +8,12 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import <stdlib.h>
-#import <string.h>
-#import <dlfcn.h>
 
-#pragma mark - getenv
-
-typedef char *(*getenv_t)(const char *);
-static getenv_t _orig_getenv = NULL;
-
-static char *$getenv(const char *name) {
-	if (UH_UNLIKELY(UHEnvBlockedFast(name))) {
-		return NULL;
-	}
-	return _orig_getenv(name);
-}
-
-#pragma mark - UIApplication canOpenURL:
+#pragma mark - UIApplication URL Scheme Hooks (100% Safe Objective-C Swizzling)
 
 static BOOL (*_orig_canOpenURL_)(id, SEL, NSURL *) = NULL;
+static BOOL (*_orig_openURL_)(id, SEL, NSURL *) = NULL;
+static void (*_orig_openURL_options_completionHandler_)(id, SEL, NSURL *, NSDictionary *, void (^)(BOOL)) = NULL;
 
 static BOOL $canOpenURL_(id self, SEL _cmd, NSURL *url) {
 	if (url != nil && url.scheme != nil) {
@@ -35,6 +22,25 @@ static BOOL $canOpenURL_(id self, SEL _cmd, NSURL *url) {
 		}
 	}
 	return _orig_canOpenURL_(self, _cmd, url);
+}
+
+static BOOL $openURL_(id self, SEL _cmd, NSURL *url) {
+	if (url != nil && url.scheme != nil) {
+		if (UH_UNLIKELY([UHConfig shouldBlockURLScheme:url.scheme])) {
+			return NO;
+		}
+	}
+	return _orig_openURL_(self, _cmd, url);
+}
+
+static void $openURL_options_completionHandler_(id self, SEL _cmd, NSURL *url, NSDictionary *options, void (^completion)(BOOL)) {
+	if (url != nil && url.scheme != nil) {
+		if (UH_UNLIKELY([UHConfig shouldBlockURLScheme:url.scheme])) {
+			if (completion) completion(NO);
+			return;
+		}
+	}
+	_orig_openURL_options_completionHandler_(self, _cmd, url, options, completion);
 }
 
 #pragma mark - LSApplicationWorkspace
@@ -64,14 +70,19 @@ void UHInstallEnvironmentHooks(void) {
 	UHHookStats *stats = [UHHookStats sharedInstance];
 	NSUInteger before = stats.activeCount;
 
-	MSHookFunction((void *)getenv, (void *)$getenv, (void **)&_orig_getenv);
-	[stats bumpBy:1];
-
 	Class uiApp = NSClassFromString(@"UIApplication");
 	if (uiApp != NULL) {
 		MSHookMessageEx(uiApp, @selector(canOpenURL:),
 			(IMP)$canOpenURL_, (IMP *)&_orig_canOpenURL_);
-		[stats bumpBy:1];
+		MSHookMessageEx(uiApp, @selector(openURL:),
+			(IMP)$openURL_, (IMP *)&_orig_openURL_);
+		if ([uiApp instancesRespondToSelector:@selector(openURL:options:completionHandler:)]) {
+			MSHookMessageEx(uiApp, @selector(openURL:options:completionHandler:),
+				(IMP)$openURL_options_completionHandler_, (IMP *)&_orig_openURL_options_completionHandler_);
+			[stats bumpBy:3];
+		} else {
+			[stats bumpBy:2];
+		}
 	}
 
 	Class lsaw = NSClassFromString(@"LSApplicationWorkspace");
@@ -87,6 +98,5 @@ void UHInstallEnvironmentHooks(void) {
 		[stats bumpBy:1];
 	}
 
-	UHLogInfoF(@"environment hooks installed (%lu total, safe mode)",
-		(unsigned long)(stats.activeCount - before));
+	UHLogInfoF(@"Environment layer initialized (pure ObjC swizzling, zero C code patching)");
 }

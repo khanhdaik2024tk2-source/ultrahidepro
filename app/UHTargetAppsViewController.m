@@ -96,6 +96,12 @@
 - (void)loadConfiguration {
 	[self.enabledBundleIDs removeAllObjects];
 	NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:self.configPath];
+	if (!dict) {
+		dict = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.ultrahidepro.plist"];
+	}
+	if (!dict) {
+		dict = [NSDictionary dictionaryWithContentsOfFile:@"/var/jb/var/mobile/Library/Preferences/com.ultrahidepro.plist"];
+	}
 	if (dict) {
 		NSArray *targets = dict[@"target_apps"];
 		if ([targets isKindOfClass:[NSArray class]]) {
@@ -105,6 +111,18 @@
 				}
 			}
 		}
+	}
+	CFArrayRef cfTargets = (CFArrayRef)CFPreferencesCopyAppValue(CFSTR("target_apps"), CFSTR("com.ultrahidepro"));
+	if (cfTargets != NULL) {
+		if (CFGetTypeID(cfTargets) == CFArrayGetTypeID()) {
+			NSArray *arr = (__bridge NSArray *)cfTargets;
+			for (id item in arr) {
+				if ([item isKindOfClass:[NSString class]] && [(NSString *)item length] > 0) {
+					[self.enabledBundleIDs addObject:(NSString *)item];
+				}
+			}
+		}
+		CFRelease(cfTargets);
 	}
 }
 
@@ -125,24 +143,34 @@
 	               attributes:@{NSFilePosixPermissions: @0777}
 	                    error:nil];
 	
-	// Try writing atomically, then non-atomically, then via NSPropertyListSerialization
+	// 1. Save to primary config.plist
 	BOOL success = [dict writeToFile:self.configPath atomically:YES];
 	if (!success) {
 		success = [dict writeToFile:self.configPath atomically:NO];
 	}
-	if (!success) {
-		NSError *err = nil;
-		NSData *data = [NSPropertyListSerialization dataWithPropertyList:dict
-		                                                          format:NSPropertyListXMLFormat_v1_0
-		                                                         options:0
-		                                                           error:&err];
-		if (data) {
-			success = [data writeToFile:self.configPath options:0 error:&err];
-		}
-	}
-	
-	// Ensure file has 0666 permissions so any process can read/write it
 	[fm setAttributes:@{NSFilePosixPermissions: @0666} ofItemAtPath:self.configPath error:nil];
+
+	// 2. Also save to /var/mobile/Library/Preferences for cfprefsd / sandboxed apps
+	NSArray *prefPaths = @[
+		@"/var/mobile/Library/Preferences/com.ultrahidepro.plist",
+		@"/var/jb/var/mobile/Library/Preferences/com.ultrahidepro.plist"
+	];
+	for (NSString *p in prefPaths) {
+		NSString *dir = [p stringByDeletingLastPathComponent];
+		[fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:@{NSFilePosixPermissions: @0777} error:nil];
+		[dict writeToFile:p atomically:NO];
+		[fm setAttributes:@{NSFilePosixPermissions: @0666} ofItemAtPath:p error:nil];
+	}
+
+	// 3. Sync CFPreferences daemon
+	CFPreferencesSetValue(CFSTR("target_apps"),
+	                      (__bridge CFPropertyListRef)sortedTargets,
+	                      CFSTR("com.ultrahidepro"),
+	                      kCFPreferencesCurrentUser,
+	                      kCFPreferencesAnyHost);
+	CFPreferencesSynchronize(CFSTR("com.ultrahidepro"),
+	                         kCFPreferencesCurrentUser,
+	                         kCFPreferencesAnyHost);
 	
 	NSLog(@"[UltraHideProApp] saveConfiguration -> success=%d, count=%lu at %@",
 	      success, (unsigned long)sortedTargets.count, self.configPath);

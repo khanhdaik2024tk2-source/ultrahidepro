@@ -6,8 +6,6 @@
 #import "UHCore/UHConfig.h"
 #import "UHCore/UHLog.h"
 #import "UHCore/UHHookStats.h"
-#import "UHCore/UHMachO.h"
-#import "UHCore/UHPAC.h"
 
 #import "UHHooks/UHFileSystem.h"
 #import "UHHooks/UHProcess.h"
@@ -17,8 +15,6 @@
 #import "UHHooks/UHNetworkIOKit.h"
 #import "UHHooks/UHBridge.h"
 #import "UHHooks/UHAntiHook.h"
-
-#import "UHKernel/UHKcall.h"
 
 // Constructor — runs as soon as the tweak dylib finishes loading.
 __attribute__((constructor))
@@ -45,25 +41,20 @@ static void UHInit(void) {
 		return;
 	}
 
-	UHLogInfo(@"UltraHide Pro v1.1.7 booting for %@", [UHConfig hostBundleID]);
+	UHLogInfo(@"UltraHide Pro v1.1.8 booting for %@", [UHConfig hostBundleID]);
 
 	UHConfig *cfg = [UHConfig sharedInstance];
 	[UHHookStats sharedInstance];
 
-	if (cfg.filesystemEnabled)   UHInstallFileSystemHooks();
-	if (cfg.processEnabled)      UHInstallProcessHooks();
-	if (cfg.dyldEnabled)         UHInstallDyldHooks();
-	if (cfg.environmentEnabled)  UHInstallEnvironmentHooks();
-	if (cfg.sandboxAmfiEnabled)  UHInstallSandboxAMFIHooks();
-	if (cfg.networkIOKitEnabled) UHInstallNetworkIOKitHooks();
+	if (cfg.filesystemEnabled)    UHInstallFileSystemHooks();
+	if (cfg.environmentEnabled)   UHInstallEnvironmentHooks();
+	if (cfg.processEnabled)       UHInstallProcessHooks();
+	if (cfg.dyldEnabled)          UHInstallDyldHooks();
+	if (cfg.sandboxAmfiEnabled)   UHInstallSandboxAMFIHooks();
+	if (cfg.networkIOKitEnabled)  UHInstallNetworkIOKitHooks();
 	if (cfg.objcAggregateEnabled) UHInstallBridgeHooks();
 	UHInstallAntiHookHooks();
 
-	if (cfg.kernelEnabled) {
-		UHInitKernelPrimitives();
-		UHInstallKernelPatches();
-	}
-
 	NSUInteger activeCount = [UHHookStats sharedInstance].activeCount;
-	UHLogInfo(@"UltraHide Pro v1.1.7 loaded with %lu active hooks", (unsigned long)activeCount);
+	UHLogInfo(@"UltraHide Pro v1.1.8 loaded with %lu active hooks", (unsigned long)activeCount);
 }
