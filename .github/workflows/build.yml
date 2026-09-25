@@ -100,7 +100,11 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install ldid jq xz
+          brew install ldid jq xz perl
+          # Theos's `make package` rule uses dm.pl which lives in the
+          # theos/vendor tree but pulls Perl modules from CPAN. Make sure
+          # perl can locate them.
+          perl -e 'use MIME::Base64; use Getopt::Long; use File::Path; use File::Copy; print "perl OK\n";'
 
       - name: Cache iOS 18.6 SDK
         id: cache-sdk
