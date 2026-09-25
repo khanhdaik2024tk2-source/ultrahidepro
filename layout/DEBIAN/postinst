@@ -1,23 +1,70 @@
 #!/bin/sh
 set -e
 
-APP_PATH="/var/jb/Applications/UltraHidePro.app"
+# ==============================================================================
+# UltraHide Pro — Post-Installation Script (iOS 15 - 18+, Dopamine & RootHide)
+# ==============================================================================
 
-# 1. Ensure file ownership and permissions for mobile/root
-if [ -d "$APP_PATH" ]; then
-    chown -R mobile:mobile "$APP_PATH" 2>/dev/null || chown -R 501:501 "$APP_PATH" 2>/dev/null || true
-    chmod -R 0755 "$APP_PATH" 2>/dev/null || true
-    if [ -f "$APP_PATH/Info.plist" ]; then
-        chmod 0644 "$APP_PATH/Info.plist" 2>/dev/null || true
+# 1. Detect Jailbreak Root (JBROOT) dynamically across all architectures
+JBROOT="/var/jb"
+
+if which jbroot >/dev/null 2>&1; then
+    DETECTED="$(jbroot / 2>/dev/null || true)"
+    if [ -n "$DETECTED" ] && [ -d "$DETECTED" ]; then
+        JBROOT="$DETECTED"
     fi
-    if [ -f "$APP_PATH/UltraHidePro" ]; then
-        chmod 0755 "$APP_PATH/UltraHidePro" 2>/dev/null || true
+elif which uicache >/dev/null 2>&1; then
+    UI_BIN="$(which uicache)"
+    DETECTED="$(dirname "$(dirname "$UI_BIN")")"
+    if [ -n "$DETECTED" ] && [ -d "$DETECTED/Applications" ]; then
+        JBROOT="$DETECTED"
     fi
 fi
 
-# 2. Locate uicache binary
+# Fallback: check if /var/jb is a symlink and resolve target
+if [ -d "/var/jb" ]; then
+    REAL_VAR_JB="$(readlink -f /var/jb 2>/dev/null || realpath /var/jb 2>/dev/null || echo "/var/jb")"
+else
+    REAL_VAR_JB="$JBROOT"
+fi
+
+# 2. Synchronize App Bundle to both /var/jb and detected JBROOT
+PRIMARY_APP="/var/jb/Applications/UltraHidePro.app"
+JBROOT_APP="$JBROOT/Applications/UltraHidePro.app"
+REAL_APP="$REAL_VAR_JB/Applications/UltraHidePro.app"
+
+# If extracted into /var/jb, ensure it is mirrored into JBROOT if different
+if [ -d "$PRIMARY_APP" ] && [ "$JBROOT" != "/var/jb" ]; then
+    mkdir -p "$JBROOT/Applications" 2>/dev/null || true
+    cp -a "$PRIMARY_APP" "$JBROOT/Applications/" 2>/dev/null || true
+elif [ -d "$JBROOT_APP" ] && [ ! -d "$PRIMARY_APP" ]; then
+    mkdir -p "/var/jb/Applications" 2>/dev/null || true
+    cp -a "$JBROOT_APP" "/var/jb/Applications/" 2>/dev/null || true
+fi
+
+# Mirror to REAL_VAR_JB as well if distinct
+if [ -d "$PRIMARY_APP" ] && [ -n "$REAL_VAR_JB" ] && [ "$REAL_VAR_JB" != "/var/jb" ] && [ "$REAL_VAR_JB" != "$JBROOT" ]; then
+    mkdir -p "$REAL_VAR_JB/Applications" 2>/dev/null || true
+    cp -a "$PRIMARY_APP" "$REAL_VAR_JB/Applications/" 2>/dev/null || true
+fi
+
+# 3. Fix Strict Ownership & Permissions (Must be root:wheel / 0755 for LaunchServices)
+for TARGET_APP in "$PRIMARY_APP" "$JBROOT_APP" "$REAL_APP"; do
+    if [ -d "$TARGET_APP" ]; then
+        chown -R 0:0 "$TARGET_APP" 2>/dev/null || chown -R root:wheel "$TARGET_APP" 2>/dev/null || true
+        chmod -R 0755 "$TARGET_APP" 2>/dev/null || true
+        if [ -f "$TARGET_APP/Info.plist" ]; then
+            chmod 0644 "$TARGET_APP/Info.plist" 2>/dev/null || true
+        fi
+        if [ -f "$TARGET_APP/UltraHidePro" ]; then
+            chmod 0755 "$TARGET_APP/UltraHidePro" 2>/dev/null || true
+        fi
+    fi
+done
+
+# 4. Locate Utilities: uicache, jbctl, sbreload
 UICACHE=""
-for P in /var/jb/usr/bin/uicache /usr/bin/uicache; do
+for P in "$JBROOT/usr/bin/uicache" "/var/jb/usr/bin/uicache" "/usr/bin/uicache"; do
     if [ -x "$P" ]; then
         UICACHE="$P"
         break
@@ -27,46 +74,40 @@ if [ -z "$UICACHE" ] && which uicache >/dev/null 2>&1; then
     UICACHE="$(which uicache)"
 fi
 
-# 3. Helper to execute commands as mobile user (crucial for user-level LaunchServices database)
-run_as_mobile() {
-    CMD="$1"
-    if which su >/dev/null 2>&1; then
-        su -c "$CMD" mobile 2>/dev/null || su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
-    elif [ -x /bin/su ]; then
-        /bin/su -c "$CMD" mobile 2>/dev/null || /bin/su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
-    elif [ -x /var/jb/bin/su ]; then
-        /var/jb/bin/su -c "$CMD" mobile 2>/dev/null || /var/jb/bin/su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
-    else
-        eval "$CMD" 2>/dev/null || true
+JBCTL=""
+for P in "$JBROOT/basebin/jbctl" "$JBROOT/usr/bin/jbctl" "/var/jb/basebin/jbctl" "/var/jb/usr/bin/jbctl" "/usr/bin/jbctl"; do
+    if [ -x "$P" ]; then
+        JBCTL="$P"
+        break
     fi
-}
-
-# 4. Register UltraHidePro.app with LaunchServices
-if [ -n "$UICACHE" ] && [ -d "$APP_PATH" ]; then
-    # Register app path as mobile user
-    run_as_mobile "$UICACHE -p '$APP_PATH'"
-    # Register app path as root user
-    "$UICACHE" -p "$APP_PATH" 2>/dev/null || true
-
-    # If canonical/realpath differs, register it as well
-    REAL_PATH=""
-    if which realpath >/dev/null 2>&1; then
-        REAL_PATH="$(realpath "$APP_PATH" 2>/dev/null || true)"
-    elif which readlink >/dev/null 2>&1; then
-        REAL_PATH="$(readlink -f "$APP_PATH" 2>/dev/null || true)"
-    fi
-    if [ -n "$REAL_PATH" ] && [ "$REAL_PATH" != "$APP_PATH" ] && [ -d "$REAL_PATH" ]; then
-        run_as_mobile "$UICACHE -p '$REAL_PATH'"
-        "$UICACHE" -p "$REAL_PATH" 2>/dev/null || true
-    fi
-
-    # Refresh all application caches for mobile and root
-    run_as_mobile "$UICACHE -a"
-    "$UICACHE" -a 2>/dev/null || true
+done
+if [ -z "$JBCTL" ] && which jbctl >/dev/null 2>&1; then
+    JBCTL="$(which jbctl)"
 fi
 
-# 5. Broadcast Darwin notifications so SpringBoard / LaunchServices detect changes immediately
-for NOTIFY in /var/jb/usr/bin/notifyutil /usr/bin/notifyutil; do
+# 5. Register with LaunchServices (Both root and mobile with proper Darwin su syntax)
+if [ -n "$UICACHE" ]; then
+    for TARGET_APP in "$PRIMARY_APP" "$JBROOT_APP" "$REAL_APP"; do
+        if [ -d "$TARGET_APP" ]; then
+            # Run as root
+            "$UICACHE" -p "$TARGET_APP" 2>/dev/null || true
+            # Run as mobile (Darwin su user -c "..." syntax)
+            su mobile -c "export PATH=/var/jb/usr/bin:\$PATH; '$UICACHE' -p '$TARGET_APP'" 2>/dev/null || true
+        fi
+    done
+
+    # Full refresh
+    "$UICACHE" -a 2>/dev/null || true
+    su mobile -c "export PATH=/var/jb/usr/bin:\$PATH; '$UICACHE' -a" 2>/dev/null || true
+fi
+
+# 6. Trigger Dopamine native icon rebuild if jbctl is available
+if [ -n "$JBCTL" ]; then
+    "$JBCTL" rebuild_icon_cache 2>/dev/null || true
+fi
+
+# 7. Darwin system notifications
+for NOTIFY in "$JBROOT/usr/bin/notifyutil" "/var/jb/usr/bin/notifyutil" "/usr/bin/notifyutil"; do
     if [ -x "$NOTIFY" ]; then
         "$NOTIFY" -p com.apple.mobile.applicationinstalled 2>/dev/null || true
         "$NOTIFY" -p com.apple.LaunchServices.applicationsChanged 2>/dev/null || true
@@ -74,29 +115,41 @@ for NOTIFY in /var/jb/usr/bin/notifyutil /usr/bin/notifyutil; do
     fi
 done
 
-# Touch LaunchServices cache directory timestamp
+# Touch LaunchServices cache
 touch /var/mobile/Library/Caches 2>/dev/null || true
 
-# 6. Ensure UltraHide Pro config directory and file are writable by all apps and mobile user
-mkdir -p /var/jb/Library/UltraHidePro 2>/dev/null || true
-chmod 0777 /var/jb/Library/UltraHidePro 2>/dev/null || true
-chown -R mobile:mobile /var/jb/Library/UltraHidePro 2>/dev/null || true
-if [ -f /var/jb/Library/UltraHidePro/config.plist ]; then
-    chmod 0666 /var/jb/Library/UltraHidePro/config.plist 2>/dev/null || true
-    chown mobile:mobile /var/jb/Library/UltraHidePro/config.plist 2>/dev/null || true
-fi
+# 8. Ensure PreferenceLoader and configuration directories
+for PREF_BASE in "$JBROOT" "/var/jb" "$REAL_VAR_JB"; do
+    if [ -d "$PREF_BASE" ]; then
+        mkdir -p "$PREF_BASE/Library/UltraHidePro" 2>/dev/null || true
+        chmod 0777 "$PREF_BASE/Library/UltraHidePro" 2>/dev/null || true
+        if [ -f "$PREF_BASE/Library/UltraHidePro/config.plist" ]; then
+            chmod 0666 "$PREF_BASE/Library/UltraHidePro/config.plist" 2>/dev/null || true
+        fi
+        
+        # PreferenceLoader mirror
+        mkdir -p "$PREF_BASE/Library/PreferenceLoader/Preferences" 2>/dev/null || true
+        if [ -f "/var/jb/Library/PreferenceLoader/Preferences/UltraHidePro.plist" ] && [ "$PREF_BASE" != "/var/jb" ]; then
+            cp -f "/var/jb/Library/PreferenceLoader/Preferences/UltraHidePro.plist" "$PREF_BASE/Library/PreferenceLoader/Preferences/" 2>/dev/null || true
+            cp -f "/var/jb/Library/PreferenceLoader/Preferences/UltraHidePro.png" "$PREF_BASE/Library/PreferenceLoader/Preferences/" 2>/dev/null || true
+        fi
+    fi
+done
 
-# 7. Asynchronously trigger SpringBoard reload 2 seconds after dpkg exits cleanly
+# 9. Asynchronously trigger SpringBoard reload 2 seconds after dpkg exits
 (
     sleep 2
+    if [ -n "$JBCTL" ]; then
+        "$JBCTL" rebuild_icon_cache 2>/dev/null || true
+    fi
     if [ -x /var/jb/usr/bin/sbreload ]; then
         /var/jb/usr/bin/sbreload 2>/dev/null || true
-    elif [ -x /usr/bin/sbreload ]; then
-        /usr/bin/sbreload 2>/dev/null || true
+    elif [ -x "$JBROOT/usr/bin/sbreload" ]; then
+        "$JBROOT/usr/bin/sbreload" 2>/dev/null || true
     elif which sbreload >/dev/null 2>&1; then
         sbreload 2>/dev/null || true
     elif [ -n "$UICACHE" ]; then
-        run_as_mobile "$UICACHE -a -r"
+        "$UICACHE" -a -r 2>/dev/null || true
     fi
 ) >/dev/null 2>&1 &
 

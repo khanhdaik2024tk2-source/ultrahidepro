@@ -149,7 +149,7 @@ def main():
             
     wait_for_run(run_id)
     
-    out_dir = os.path.abspath("dist/v1.1.9")
+    out_dir = os.path.abspath("dist/v1.2.0")
     deb_path = download_artifact(run_id, out_dir)
     if not deb_path or not os.path.exists(deb_path):
         print("Failed to download deb package")
@@ -157,44 +157,43 @@ def main():
     
     print(f"Downloaded DEB: {deb_path}")
     
-    tag = "v1.1.9"
-    name = "UltraHide Pro v1.1.9 (Reliable Home Screen App Icon & Pure Zero-Crash Engine)"
-    body = """# UltraHide Pro v1.1.9 — Hiển Thị App Màn Hình Chính Chuẩn Xác & Pure Zero-Crash Engine
+    tag = "v1.2.0"
+    name = "UltraHide Pro v1.2.0 (Dopamine-roothide 3.x Architecture for iOS 18+)"
+    body = """# UltraHide Pro v1.2.0 — Kiến Trúc Tương Thích Hoàn Hảo Dopamine-roothide 3.x Trên iOS 18+
 
-### 📱 Cải Tiến Quan Trọng Trong v1.1.9: Khắc Phục Triệt Để Icon App Trên Màn Hình Chính
-Bản cập nhật v1.1.9 giải quyết dứt điểm tình trạng cài đặt xong gói `.deb` nhưng biểu tượng ứng dụng **UltraHide Pro** không xuất hiện trên Màn hình chính (SpringBoard) của iOS 18 (Dopamine rootless):
+### 🚀 Bước Đột Phá Lớn: Học Tập & Phát Triển Trực Tiếp Từ Mã Nguồn Dopamine-roothide
+Bản cập nhật **v1.2.0** tái thiết toàn diện quy trình đăng ký ứng dụng và quản lý tệp tin dựa trên kiến trúc lõi của **Dopamine-roothide 3.x**:
 
-1. **Thực Thi `uicache` Đúng Chuẩn Dưới Ngữ Cảnh Người Dùng `mobile` (UID 501):**
-   - Cơ chế bảo mật và quản lý LaunchServices trên iOS 15/16/17/18 tách biệt hoàn toàn cơ sở dữ liệu biểu tượng người dùng (`/var/mobile/Library/Caches/`) với người dùng `root`.
-   - Trước đây `postinst` chạy quyền `root` khiến `uicache` ghi nhận vào phiên quản trị hoặc không cập nhật được cache của `mobile`.
-   - Trong v1.1.9, lệnh đăng ký gói ứng dụng được chuyển tiếp trực tiếp vào `su -c "... uicache" mobile` và đồng bộ kép với cả root.
+1. **Tự Động Nhận Diện `JBROOT` Động (Dynamic JBROOT Resolution):**
+   - Trong RootHide, đường dẫn jailbreak không cố định tại `/var/jb` mà được ngẫu nhiên hóa (Randomized Root).
+   - `postinst` trong v1.2.0 tự động truy vấn `jbroot /`, phân giải cây thư mục `uicache`, và tự động đồng bộ file `.app` vào cả `/var/jb/Applications` và `$JBROOT/Applications`. Bất kể thiết bị chạy Dopamine thuần, Dopamine-roothide hay RootHide Bootstrap, ứng dụng luôn nằm đúng vị trí LaunchServices tìm kiếm.
 
-2. **Đăng Ký Đa Tầng Cụ Thể (Specific Bundle Path + Realpath + Global Refresh):**
-   - Đăng ký đích danh bundle `/var/jb/Applications/UltraHidePro.app` qua cờ `-p`.
-   - Tự động phân giải đường dẫn thật (realpath / symlink canonical) phòng trường hợp Dopamine liên kết ngẫu nhiên (`/private/preboot/...`).
-   - Cập nhật toàn diện icon cache với cờ `-a`.
+2. **Khôi Phục Quyền Sở Hữu `root:wheel (0:0)` Chuẩn System Application:**
+   - Trên iOS 18, LaunchServices bắt buộc các ứng dụng hệ thống trong thư mục Applications phải thuộc sở hữu của `root:wheel` (`0:0`) với quyền `0755`.
+   - v1.2.0 chuẩn hoá triệt để quyền hạn trên toàn bộ bundle, tệp thực thi Mach-O và `Info.plist`, ngăn chặn việc hệ điều hành âm thầm từ chối nạp ứng dụng.
 
-3. **Phát Tín Hiệu Hệ Thống Darwin Notifications:**
-   - Tự động gửi thông báo hệ thống `com.apple.mobile.applicationinstalled` và `com.apple.LaunchServices.applicationsChanged` thông qua `notifyutil`.
-   - Tự động nạp lại SpringBoard một cách êm ái (soft sbreload) 2 giây sau khi `dpkg` hoàn tất cài đặt an toàn.
+3. **Tích Hợp `jbctl rebuild_icon_cache` (Công Cụ Gốc Của Dopamine 3.x):**
+   - Thay vì chỉ dựa vào `uicache`, script cài đặt tự động kích hoạt `jbctl rebuild_icon_cache` — API gốc của Dopamine gọi `_LSPrivateRebuildApplicationDatabasesForSystemApps:internal:user:` kết hợp hook `lsd.x` để SpringBoard tái nạp icon ngay lập tức.
 
-4. **Bổ Sung Khai Báo Hệ Thống Tiêu Chuẩn:**
-   - Bổ sung `MinimumOSVersion = 15.0` vào `Info.plist`.
-   - Bổ sung phụ thuộc `uikittools (>= 2.0)` trong `control` để đảm bảo công cụ quản lý giao diện luôn sẵn sàng.
+4. **Tích Hợp URL Scheme `ultrahidepro://` Độc Lập:**
+   - Bổ sung URL scheme `ultrahidepro` vào `Info.plist` và `UHAppDelegate`.
+   - Người dùng có thể mở app bất kỳ lúc nào bằng cách gõ `ultrahidepro://` vào Safari hoặc Spotlight, kể cả khi trang màn hình chính bị ẩn.
 
-5. **Giữ Nguyên 100% Kiến Trúc Pure Zero-Crash Engine (Đã Chứng Minh Hiệu Quả Ở v1.1.8):**
-   - 0 MSHookFunction trên hàm C hệ thống (không đứt gãy trampoline, không sinh bẫy `BRK #1` gây văng app).
-   - 100% Objective-C Runtime Swizzling an toàn tuyệt đối với PAC/BTI.
-   - Đồng bộ cấu hình kép qua `cfprefsd` xuyên thấu sandbox ngân hàng (MBBank, VCB, Momo,...).
+5. **Bổ Sung Bảng Điều Khiển PreferenceLoader Trong Cài Đặt (Settings -> UltraHide Pro):**
+   - Tích hợp sẵn panel điều khiển trong **Cài đặt (Settings.app)**.
+   - Cung cấp sẵn các nút gạt bật/tắt bảo vệ, nút "Mở Ứng Dụng UltraHide Pro", và nút "Làm Mới Icon (UICache)" trực tiếp trong Settings.
+
+6. **Kế Thừa 100% Pure Zero-Crash Engine:**
+   - Tuyệt đối không can thiệp mã máy C qua MSHookFunction, không gây văng MBBank hay bất kỳ ứng dụng ngân hàng nào.
 
 ---
 ### 📦 Hướng Dẫn Cài Đặt (Installation)
-1. Tải file `.deb` đính kèm bên dưới: `com.ultrahidepro.tweak_1.1.9_iphoneos-arm64.deb`.
+1. Tải file `.deb` v1.2.0 đính kèm bên dưới: `com.ultrahidepro.tweak_1.2.0_iphoneos-arm64.deb`.
 2. Cài đặt bằng **Sileo**, **Zebra** hoặc **Filza**.
-3. Sau khi cài đặt hoàn tất, thiết bị sẽ tự động nạp lại SpringBoard trong 2 giây và icon **UltraHide Pro** sẽ xuất hiện ngay trên Màn hình chính!
-   *(Nếu chưa thấy ngay do cache hệ thống cũ, chỉ cần mở Dopamine bấm "Respring" hoặc chạy `uicache -a -r` trong Terminal).*
-4. Mở app **UltraHide Pro** -> Chọn ứng dụng cần bảo vệ (MBBank,...) -> Bấm **Lưu**.
-5. Mở MBBank: Ứng dụng chạy mượt mà 100%, không bị văng và hoàn toàn vượt qua kiểm tra jailbreak!
+3. Khi cài đặt xong, máy sẽ tự động làm mới giao diện trong 2 giây. Icon **UltraHide Pro** sẽ hiển thị trên Màn hình chính!
+4. **Cách mở app dự phòng:**
+   - Vào **Cài đặt (Settings)** -> Chọn **UltraHide Pro** -> Bấm **Mở Ứng Dụng UltraHide Pro**.
+   - Hoặc mở **Safari** gõ `ultrahidepro://` để vào trực tiếp ứng dụng.
 """
     
     rel = create_release(tag, name, body)

@@ -44,6 +44,7 @@ PLIST_FILES = [
     "entry.plist",
     "Resources/config.plist",
     "Resources/entitlements.plist",
+    "Resources/UltraHidePro.plist",
     "app/Info.plist",
     "app/entitlements.plist",
 ]

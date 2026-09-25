@@ -1,8 +1,22 @@
 #!/bin/sh
-APP_PATH="/var/jb/Applications/UltraHidePro.app"
+
+# Detect JBROOT
+JBROOT="/var/jb"
+if which jbroot >/dev/null 2>&1; then
+    DETECTED="$(jbroot / 2>/dev/null || true)"
+    if [ -n "$DETECTED" ] && [ -d "$DETECTED" ]; then
+        JBROOT="$DETECTED"
+    fi
+elif which uicache >/dev/null 2>&1; then
+    UI_BIN="$(which uicache)"
+    DETECTED="$(dirname "$(dirname "$UI_BIN")")"
+    if [ -n "$DETECTED" ] && [ -d "$DETECTED/Applications" ]; then
+        JBROOT="$DETECTED"
+    fi
+fi
 
 UICACHE=""
-for P in /var/jb/usr/bin/uicache /usr/bin/uicache; do
+for P in "$JBROOT/usr/bin/uicache" "/var/jb/usr/bin/uicache" "/usr/bin/uicache"; do
     if [ -x "$P" ]; then
         UICACHE="$P"
         break
@@ -12,24 +26,19 @@ if [ -z "$UICACHE" ] && which uicache >/dev/null 2>&1; then
     UICACHE="$(which uicache)"
 fi
 
-run_as_mobile() {
-    CMD="$1"
-    if which su >/dev/null 2>&1; then
-        su -c "$CMD" mobile 2>/dev/null || su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
-    elif [ -x /bin/su ]; then
-        /bin/su -c "$CMD" mobile 2>/dev/null || /bin/su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
-    elif [ -x /var/jb/bin/su ]; then
-        /var/jb/bin/su -c "$CMD" mobile 2>/dev/null || /var/jb/bin/su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
-    else
-        eval "$CMD" 2>/dev/null || true
-    fi
-}
-
 if [ -n "$UICACHE" ]; then
-    run_as_mobile "$UICACHE -u '$APP_PATH'"
-    "$UICACHE" -u "$APP_PATH" 2>/dev/null || true
-    run_as_mobile "$UICACHE -a"
+    for TARGET_APP in "/var/jb/Applications/UltraHidePro.app" "$JBROOT/Applications/UltraHidePro.app"; do
+        if [ -d "$TARGET_APP" ]; then
+            "$UICACHE" -u "$TARGET_APP" 2>/dev/null || true
+            su mobile -c "'$UICACHE' -u '$TARGET_APP'" 2>/dev/null || true
+        fi
+    done
     "$UICACHE" -a 2>/dev/null || true
+fi
+
+# Clean up mirrored RootHide app if present
+if [ "$JBROOT" != "/var/jb" ] && [ -d "$JBROOT/Applications/UltraHidePro.app" ]; then
+    rm -rf "$JBROOT/Applications/UltraHidePro.app" 2>/dev/null || true
 fi
 
 exit 0

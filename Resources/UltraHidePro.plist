@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>entry</key>
+	<dict>
+		<key>cell</key>
+		<string>PSLinkCell</string>
+		<key>label</key>
+		<string>UltraHide Pro</string>
+		<key>icon</key>
+		<string>UltraHidePro.png</string>
+	</dict>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Cấu Hình Lõi (Core Engine)</string>
+			<key>footerText</key>
+			<string>UltraHide Pro v1.2.0 — Tương thích tuyệt đối iOS 18+ và Dopamine-roothide.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.ultrahidepro</string>
+			<key>key</key>
+			<string>enabled</string>
+			<key>label</key>
+			<string>Bật Bảo Vệ UltraHide</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.ultrahidepro</string>
+			<key>key</key>
+			<string>filesystem_enabled</string>
+			<key>label</key>
+			<string>Ẩn Tệp Tin &amp; Đường Dẫn JB</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.ultrahidepro</string>
+			<key>key</key>
+			<string>process_enabled</string>
+			<key>label</key>
+			<string>Chặn Quét Tiến Trình</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.ultrahidepro</string>
+			<key>key</key>
+			<string>urlschemes_enabled</string>
+			<key>label</key>
+			<string>Ẩn URL Schemes (Cydia/Sileo)</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Phím Tắt &amp; Tiện Ích</string>
+			<key>footerText</key>
+			<string>Nếu không thấy icon trên Màn hình chính, nhấn "Mở Ứng Dụng UltraHide Pro" hoặc "Làm Mới Biểu Tượng (UICache)".</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>action</key>
+			<string>openCompanionApp</string>
+			<key>label</key>
+			<string>Mở Ứng Dụng UltraHide Pro</string>
+		</dict>
+	</array>
+</dict>
+</plist>
