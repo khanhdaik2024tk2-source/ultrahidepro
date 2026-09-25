@@ -107,7 +107,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /opt/theos/sdks/iPhoneOS18.6.sdk
-          key: ios-sdk-18.6-archive-$(date +%Y%V)
+          key: ios-sdk-18.6-archive-$(date +%Y%V)-v2
           restore-keys: |
             ios-sdk-18.6-archive-
 
@@ -116,22 +116,34 @@ jobs:
         run: |
           set -e
           cd /tmp
-          # Fall-back URL list — try theos/sdks, sbingner/SDK and Apple
-          # Xcode mirror in that order.
+          # Fall-back URL list — try community SDK mirrors that publish
+          # pre-patched iOS 18.6 SDK bundles ready for Theos.
           URLS=(
-            "https://github.com/theos/sdks/releases/download/iPhoneOS18.6/iPhoneOS18.6.sdk.tar.xz"
-            "https://github.com/sbingner/SDK/releases/download/18.6/iPhoneOS18.6.sdk.tar.xz"
+            "https://github.com/xybp888/iOS-SDKs/releases/download/iOS18.6-SDKs/iPhoneOS18.6.sdk.zip"
+            "https://github.com/Tonwalter888/iOS-SDKs/archive/refs/heads/main.zip"
           )
           for u in "${URLS[@]}"; do
             echo "[sdk] trying $u"
-            if curl --fail -sSL -o ios18.6.tar.xz "$u"; then
+            if curl --fail -sSL -o ios18.6.sdk.zip "$u"; then
+              ls -lh ios18.6.sdk.zip
               break
             fi
           done
-          test -s ios18.6.tar.xz
+          test -s ios18.6.sdk.zip
           mkdir -p /opt/theos/sdks
-          tar -xJf ios18.6.tar.xz -C /opt/theos/sdks
-          rm ios18.6.tar.xz
+          unzip -q -o ios18.6.sdk.zip -d /opt/theos/sdks/
+          # xybp888 archive has root iPhoneOS18.6.sdk/, Tonwalter888 needs
+          # different layout; pick whichever materialised.
+          if [[ ! -d /opt/theos/sdks/iPhoneOS18.6.sdk ]]; then
+            # Some archives nest the SDK in a subdirectory; promote it.
+            SUBDIR=$(find /opt/theos/sdks -type d -name iPhoneOS18.6.sdk | head -n1)
+            if [[ -n "$SUBDIR" && "$SUBDIR" != "/opt/theos/sdks/iPhoneOS18.6.sdk" ]]; then
+              echo "[sdk] promoting $SUBDIR"
+              mv "$SUBDIR" /opt/theos/sdks/iPhoneOS18.6.sdk
+            fi
+          fi
+          rm ios18.6.sdk.zip
+          ls /opt/theos/sdks/
 
       - name: Validate sources
         run: |
@@ -209,7 +221,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /opt/theos/sdks/iPhoneOS18.6.sdk
-          key: ios-sdk-18.6-archive-$(date +%Y%V)
+          key: ios-sdk-18.6-archive-$(date +%Y%V)-v2
 
       - name: Static analysis
         run: |
