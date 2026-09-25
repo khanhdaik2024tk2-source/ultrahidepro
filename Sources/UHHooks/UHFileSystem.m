@@ -17,6 +17,8 @@
 #import <string.h>
 #import <limits.h>
 #import <dlfcn.h>
+#import <sys/param.h>
+#import <sys/mount.h>
 
 #pragma mark - Common helpers
 
@@ -92,6 +94,8 @@ static NSArray *$NSFileManager_contentsOfDirectoryAtPath_error_(id self, SEL _cm
 		NSString *full = [path stringByAppendingPathComponent:item];
 		if ([path isEqualToString:@"/var"] && [item isEqualToString:@"jb"]) continue;
 		if ([path isEqualToString:@"/private/var"] && [item isEqualToString:@"jb"]) continue;
+		if ([path containsString:@"/private/preboot"] &&
+		    ([item containsString:@"dopamine"] || [item containsString:@"jb"])) continue;
 		if ([UHConfig shouldBlockPath:full]) continue;
 		[filtered addObject:item];
 	}
@@ -272,6 +276,13 @@ static char *$realpath(const char *path, char *resolved_path) {
 	return res;
 }
 
+typedef int (*statfs_t)(const char *, struct statfs *);
+static statfs_t _orig_statfs = NULL;
+static int $statfs(const char *path, struct statfs *buf) {
+	if (UH_UNLIKELY(UHPathBlocked(path))) { errno = ENOENT; return -1; }
+	return _orig_statfs(path, buf);
+}
+
 typedef DIR *(*opendir_t)(const char *);
 static opendir_t _orig_opendir = NULL;
 static DIR *$opendir(const char *path) {
@@ -311,7 +322,7 @@ static bool UHReadDirIsParentBlacklisted(const char *parent) {
 	if (parent == NULL || parent[0] == '\0') return false;
 	if (strcmp(parent, "/var") == 0) return true;
 	if (strcmp(parent, "/private/var") == 0) return true;
-	if (strcmp(parent, "/private/preboot") == 0) return true;
+	if (strstr(parent, "/private/preboot") != NULL) return true;
 	if (strcmp(parent, "/") == 0) return true;
 	if (strcmp(parent, "/Applications") == 0) return true;
 	if (strcmp(parent, "/var/jb/Applications") == 0) return true;
@@ -342,7 +353,7 @@ static struct dirent *$readdir(DIR *dirp) {
 			    strcmp(e->d_name, "jb") == 0) {
 				continue;
 			}
-			if (strcmp(parent, "/private/preboot") == 0 &&
+			if (strstr(parent, "/private/preboot") != NULL &&
 			    (strstr(e->d_name, "dopamine") != NULL || strstr(e->d_name, "jb") != NULL)) {
 				continue;
 			}
@@ -418,9 +429,10 @@ void UHInstallFileSystemHooks(void) {
 	MSHookFunction((void *)readlink,   (void *)$readlink,   (void **)&_orig_readlink);
 	MSHookFunction((void *)readlinkat, (void *)$readlinkat, (void **)&_orig_readlinkat);
 	MSHookFunction((void *)realpath,   (void *)$realpath,   (void **)&_orig_realpath);
+	MSHookFunction((void *)statfs,     (void *)$statfs,     (void **)&_orig_statfs);
 	MSHookFunction((void *)opendir,    (void *)$opendir,    (void **)&_orig_opendir);
 	MSHookFunction((void *)readdir,    (void *)$readdir,    (void **)&_orig_readdir);
-	[stats bumpBy:13];
+	[stats bumpBy:14];
 
 	// INODE64 / 64-bit stat variants
 	void *fn_stat64 = dlsym(RTLD_DEFAULT, "stat64");

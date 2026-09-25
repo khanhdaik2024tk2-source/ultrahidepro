@@ -16,6 +16,9 @@ UH_PRIVATE void UHInstallDyldHooks(void);
 /// inspect the table.
 UH_PRIVATE void UHDyldSetHiddenImageDelta(uint32_t delta);
 
+/// Check if the image at index belongs to a tweak or jailbreak library.
+UH_PRIVATE BOOL UHDyldIsTweakImage(uint32_t index);
+
 #ifdef __cplusplus
 }
 #endif

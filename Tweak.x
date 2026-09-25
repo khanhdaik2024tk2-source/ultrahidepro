@@ -48,7 +48,7 @@ static void UHInit(void) {
 		return;
 	}
 
-	UHLogInfo(@"UltraHide Pro v1.1.2 booting for %@", [UHConfig hostBundleID]);
+	UHLogInfo(@"UltraHide Pro v1.1.3 booting for %@", [UHConfig hostBundleID]);
 
 	// Order matters: capture PAC, capture Mach-O, then load config.
 	[UHPAC bootstrap];
@@ -64,7 +64,6 @@ static void UHInit(void) {
 	if (cfg.networkIOKitEnabled) UHInstallNetworkIOKitHooks();
 	if (cfg.objcAggregateEnabled) UHInstallBridgeHooks();
 	UHInstallAntiHookHooks();           // always on
-	UHInstallRuntimeProtectionHooks();  // always on
 
 	if (cfg.kernelEnabled) {
 		UHInitKernelPrimitives();

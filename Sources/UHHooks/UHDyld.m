@@ -49,6 +49,13 @@ static const char *$dyld_get_image_name(uint32_t index) {
 	return orig;
 }
 
+BOOL UHDyldIsTweakImage(uint32_t index) {
+	if (_orig_dyld_get_image_name == NULL) return NO;
+	const char *name = _orig_dyld_get_image_name(index);
+	if (name == NULL) return NO;
+	return [UHMachO isTweakPath:name];
+}
+
 #pragma mark - dlopen / dlopen_from
 
 typedef void *(*dlopen_t)(const char *, int);
@@ -70,17 +77,27 @@ static bool UHDyldIsHiddenSymbolPrefix(const char *symbol) {
 	if (symbol[0] == '_') symbol++; // Mach-O leading underscore.
 	if (symbol[0] == '\0') return false;
 	static const char *prefixes[] = {
-		"MSHookFunction",
-		"MSHookMessageEx",
+		"MSHook",
+		"MSFindSymbol",
+		"MSGetImageByName",
 		"ultrahidepro_",
 		"UltraHidePro_",
 		"ellekit",
 		"ElleKit",
+		"libellekit",
+		"substrate",
+		"Substrate",
+		"substitute",
+		"Substitute",
+		"libhooker",
+		"cydia",
+		"frida",
+		"dopamine",
 		NULL,
 	};
 	for (size_t i = 0; prefixes[i] != NULL; i++) {
 		size_t n = strlen(prefixes[i]);
-		if (strncmp(symbol, prefixes[i], n) == 0) return true;
+		if (strncasecmp(symbol, prefixes[i], n) == 0) return true;
 	}
 	return false;
 }
@@ -111,48 +128,10 @@ static int $dladdr(const void *addr, Dl_info *info) {
 	int rc = _orig_dladdr(addr, info);
 	if (rc != 0 && info != NULL && info->dli_fname != NULL) {
 		if (UH_UNLIKELY([UHMachO isTweakPath:info->dli_fname])) {
-			info->dli_fname = "/usr/lib/system/libsystem_c.dylib";
-			info->dli_sname = "strlen";
+			info->dli_fname = "/usr/lib/system/libsystem_trace.dylib";
 		}
 	}
 	return rc;
-}
-
-#pragma mark - _dyld_register_func_for_add_image
-
-typedef void (*dyld_image_callback_t)(const struct mach_header *, intptr_t);
-typedef void (*dyld_register_func_for_add_image_t)(dyld_image_callback_t);
-static dyld_register_func_for_add_image_t _orig_dyld_register_func_for_add_image = NULL;
-
-static dyld_image_callback_t gAppAddImageCallbacks[16];
-static size_t gAppAddImageCallbackCount = 0;
-
-static void UHAddImageCallbackDispatcher(const struct mach_header *mh, intptr_t vmaddr_slide) {
-	if (mh == NULL) return;
-	Dl_info info;
-	if (dladdr((const void *)mh, &info) != 0 && info.dli_fname != NULL) {
-		if ([UHMachO isTweakPath:info.dli_fname]) {
-			// Suppress tweak images from detection callbacks
-			return;
-		}
-	}
-	for (size_t i = 0; i < gAppAddImageCallbackCount; i++) {
-		if (gAppAddImageCallbacks[i] != NULL) {
-			gAppAddImageCallbacks[i](mh, vmaddr_slide);
-		}
-	}
-}
-
-static void $dyld_register_func_for_add_image(dyld_image_callback_t func) {
-	if (func == NULL) return;
-	if (gAppAddImageCallbackCount < 16) {
-		gAppAddImageCallbacks[gAppAddImageCallbackCount++] = func;
-		if (gAppAddImageCallbackCount == 1 && _orig_dyld_register_func_for_add_image != NULL) {
-			_orig_dyld_register_func_for_add_image(UHAddImageCallbackDispatcher);
-		}
-	} else if (_orig_dyld_register_func_for_add_image != NULL) {
-		_orig_dyld_register_func_for_add_image(func);
-	}
 }
 
 #pragma mark - Installer
@@ -176,10 +155,7 @@ void UHInstallDyldHooks(void) {
 	MSHookFunction((void *)dladdr,
 	               (void *)$dladdr,
 	               (void **)&_orig_dladdr);
-	MSHookFunction((void *)_dyld_register_func_for_add_image,
-	               (void *)$dyld_register_func_for_add_image,
-	               (void **)&_orig_dyld_register_func_for_add_image);
-	[stats bumpBy:6];
+	[stats bumpBy:5];
 
 	UHLogInfoF(@"dyld hooks installed (%lu total)",
 		(unsigned long)(stats.activeCount - before));

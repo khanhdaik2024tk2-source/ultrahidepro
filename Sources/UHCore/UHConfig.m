@@ -182,10 +182,42 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 + (BOOL)shouldBlockPath:(NSString *)path {
 	if (path.length == 0) return NO;
 	NSString *lower = [path lowercaseString];
-	if ([lower containsString:@"ultrahidepro"]) return NO;
-	for (NSString *blk in [self sharedInstance].blacklistPaths) {
+
+	// Allow UltraHidePro internal config loading
+	if ([lower hasSuffix:@"ultrahidepro/config.plist"]) return NO;
+
+	// Dopamine rootless bootstrap stored in /private/preboot/<UUID>/dopamine... or .../jb...
+	if ([lower hasPrefix:@"/private/preboot/"]) {
+		if ([lower containsString:@"dopamine"] || [lower containsString:@"/jb"]) {
+			return YES;
+		}
+		// Do NOT block Cryptexes or other system preboot paths!
+		return NO;
+	}
+
+	NSArray<NSString *> *blist = [self sharedInstance].blacklistPaths;
+	for (NSString *blk in blist) {
 		if ([lower hasPrefix:blk]) return YES;
 	}
+
+	// Handle /private symlink aliases for /var, /etc, /tmp
+	NSString *alias = nil;
+	if ([lower hasPrefix:@"/private/var/"] ||
+	    [lower hasPrefix:@"/private/etc/"] ||
+	    [lower hasPrefix:@"/private/tmp/"]) {
+		alias = [lower substringFromIndex:8]; // "/var/...", "/etc/...", "/tmp/..."
+	} else if ([lower hasPrefix:@"/var/"] ||
+	           [lower hasPrefix:@"/etc/"] ||
+	           [lower hasPrefix:@"/tmp/"]) {
+		alias = [@"/private" stringByAppendingString:lower];
+	}
+
+	if (alias != nil) {
+		for (NSString *blk in blist) {
+			if ([alias hasPrefix:blk]) return YES;
+		}
+	}
+
 	return NO;
 }
 

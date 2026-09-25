@@ -135,10 +135,10 @@ static dyld_get_image_header_t _orig_dyld_get_image_header = NULL;
 static const struct mach_header *$dyld_get_image_header(uint32_t index) {
 	const struct mach_header *hdr = _orig_dyld_get_image_header(index);
 	if (hdr == NULL) return NULL;
-	if (hdr == (const struct mach_header *)[UHMachO ownLoadAddress]) {
-		// Caller asked about our own image. Hand back NULL — the index
-		// is not exposed because we already lied about count above.
-		return NULL;
+	if (hdr == (const struct mach_header *)[UHMachO ownLoadAddress] || UHDyldIsTweakImage(index)) {
+		// Never return NULL; callers dereference hdr->magic which causes SIGSEGV.
+		// Return the main executable header (index 0) as a safe fallback.
+		return _orig_dyld_get_image_header(0);
 	}
 	return hdr;
 }

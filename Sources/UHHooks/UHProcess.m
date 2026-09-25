@@ -257,47 +257,6 @@ static int $csops(pid_t pid, unsigned int op, void *buffer, size_t size) {
 	return rc;
 }
 
-#pragma mark - Anti-Tamper Kill Interception (exit, _exit, abort)
-
-typedef void (*exit_t)(int);
-static exit_t _orig_exit = NULL;
-static void $exit(int status) {
-	if ([UHConfig activeForCurrentApp]) {
-		UHLogErrorF(@"[UltraHidePro] Intercepted anti-tamper exit(%d)", status);
-		if (![NSThread isMainThread]) {
-			pthread_exit(NULL);
-			return;
-		}
-	}
-	if (_orig_exit) _orig_exit(status);
-}
-
-typedef void (*_exit_t)(int);
-static _exit_t _orig__exit = NULL;
-static void $_exit(int status) {
-	if ([UHConfig activeForCurrentApp]) {
-		UHLogErrorF(@"[UltraHidePro] Intercepted anti-tamper _exit(%d)", status);
-		if (![NSThread isMainThread]) {
-			pthread_exit(NULL);
-			return;
-		}
-	}
-	if (_orig__exit) _orig__exit(status);
-}
-
-typedef void (*abort_t)(void);
-static abort_t _orig_abort = NULL;
-static void $abort(void) {
-	if ([UHConfig activeForCurrentApp]) {
-		UHLogErrorF(@"[UltraHidePro] Intercepted anti-tamper abort()");
-		if (![NSThread isMainThread]) {
-			pthread_exit(NULL);
-			return;
-		}
-	}
-	if (_orig_abort) _orig_abort();
-}
-
 #pragma mark - Installer
 
 void UHInstallProcessHooks(void) {
@@ -323,24 +282,6 @@ void UHInstallProcessHooks(void) {
 	void *fn_csops = dlsym(RTLD_DEFAULT, "csops");
 	if (fn_csops != NULL) {
 		MSHookFunction(fn_csops, (void *)$csops, (void **)&_orig_csops);
-		[stats bumpBy:1];
-	}
-
-	void *fn_exit = dlsym(RTLD_DEFAULT, "exit");
-	if (fn_exit != NULL) {
-		MSHookFunction(fn_exit, (void *)$exit, (void **)&_orig_exit);
-		[stats bumpBy:1];
-	}
-
-	void *fn__exit = dlsym(RTLD_DEFAULT, "_exit");
-	if (fn__exit != NULL) {
-		MSHookFunction(fn__exit, (void *)$_exit, (void **)&_orig__exit);
-		[stats bumpBy:1];
-	}
-
-	void *fn_abort = dlsym(RTLD_DEFAULT, "abort");
-	if (fn_abort != NULL) {
-		MSHookFunction(fn_abort, (void *)$abort, (void **)&_orig_abort);
 		[stats bumpBy:1];
 	}
 
