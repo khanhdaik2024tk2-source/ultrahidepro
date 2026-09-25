@@ -18,11 +18,20 @@ param(
     [Parameter(Mandatory)] [string] $Repo,
     [switch]   $Public,
     [string]   $Branch = 'main',
-    [string]   $TokenFile = (Join-Path $PSScriptRoot '.token')
+    [string]   $TokenFile
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+if (-not $TokenFile) {
+    if ($PSScriptRoot) {
+        $TokenFile = Join-Path $PSScriptRoot '.token'
+    } else {
+        $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+        $TokenFile = Join-Path $here '.token'
+    }
+}
 
 if (-not (Test-Path $TokenFile)) {
     Write-Error "Token file not found: $TokenFile. Create it with: Set-Content -Path '$TokenFile' -Value '<ghp_xxx>'"
@@ -52,29 +61,36 @@ function Test-RepoExists {
 }
 
 function New-Repo {
-    $body = @{
-        name        = $Repo
-        description = 'UltraHide Pro — jailbreak-detection bypass for Dopamine 3.0.9 + iOS 18.6.2'
-        private     = -not $Public
-        auto_init   = $false
-    } | ConvertTo-Json
-    $url = "https://api.github.com/user/repos"
-    Invoke-RestMethod -Method Post -Uri $url -Headers (Get-AuthHeaders) -Body $body | Out-Null
+    $payload = [ordered]@{}
+    $payload['name']        = $Repo
+    $payload['description'] = 'UltraHide Pro - jailbreak-detection bypass for Dopamine 3.0.9 + iOS 18.6.2'
+    $payload['private']     = -not $Public
+    $payload['auto_init']   = $false
+    $body = $payload | ConvertTo-Json -Compress -Depth 5
+    $url  = 'https://api.github.com/user/repos'
+    Write-Host "[push] POST $url  body=$body"
+    Invoke-RestMethod -Method Post -Uri $url -Headers (Get-AuthHeaders) -Body $body -ContentType 'application/json' | Out-Null
     Write-Host "[push] created $Owner/$Repo (public=$Public)"
 }
 
 function Push-Branch {
     $remote = "https://x-access-token:$token@github.com/$Owner/$Repo.git"
-    git remote remove origin 2>$null
-    git remote add origin $remote
-    git push --set-upstream origin $Branch 2>&1 | ForEach-Object { Write-Host $_ }
+    # Tolerate missing remote — only suppress stderr, not the exception text.
+    try {
+        $rc = & git remote remove origin 2>&1
+    } catch {
+        Write-Host "[push] (no existing origin to remove)"
+    }
+    & git remote add origin $remote
+    if ($LASTEXITCODE -ne 0) { throw "git remote add failed" }
+    & git push --set-upstream origin $Branch
     if ($LASTEXITCODE -ne 0) { throw "git push failed" }
 }
 
 function Invoke-DispatchCi {
-    $url = "https://api.github.com/repos/$Owner/$Repo/actions/workflows/build.yml/dispatches"
-    $body = @{ ref = $Branch } | ConvertTo-Json
-    Invoke-RestMethod -Method Post -Uri $url -Headers (Get-AuthHeaders) -Body $body | Out-Null
+    $url  = "https://api.github.com/repos/$Owner/$Repo/actions/workflows/build.yml/dispatches"
+    $body = (@{ ref = $Branch } | ConvertTo-Json -Compress)
+    Invoke-RestMethod -Method Post -Uri $url -Headers (Get-AuthHeaders) -Body $body -ContentType 'application/json' | Out-Null
     Write-Host "[push] dispatched build.yml on $Branch"
 }
 

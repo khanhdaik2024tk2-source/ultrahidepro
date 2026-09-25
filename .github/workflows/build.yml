@@ -11,6 +11,11 @@ on:
         description: 'arm64 (Dopamine 3.0.9 rootless) or arm64e (future)'
         required: false
         default: 'arm64'
+      skip_macos_jobs:
+        description: 'Skip macOS-14 jobs (offline billing-friendly mode)'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: build-${{ github.ref }}
@@ -36,9 +41,18 @@ jobs:
 
   verify:
     name: build / verify (${{ matrix.arch }})
+    # macos-14 is paid (10x Linux minutes). Allow workflows to skip it via
+    # `workflow_dispatch` input or repo-level variable
+    # `UH_CI_SKIP_MACOS=1`. The job is also marked `continue-on-error: true`
+    # so a billing skip does not turn the whole CI red.
     runs-on: macos-14
     timeout-minutes: 60
+    continue-on-error: true
     needs: offline_check
+    if: |
+      (github.event_name == 'workflow_dispatch' && !inputs.skip_macos_jobs)
+      || (github.event_name != 'workflow_dispatch'
+          && vars.UH_CI_SKIP_MACOS != '1')
     strategy:
       fail-fast: false
       matrix:
@@ -175,7 +189,11 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 20
     continue-on-error: true
-    needs: verify
+    needs: offline_check
+    if: |
+      (github.event_name == 'workflow_dispatch' && !inputs.skip_macos_jobs)
+      || (github.event_name != 'workflow_dispatch'
+          && vars.UH_CI_SKIP_MACOS != '1')
     steps:
       - uses: actions/checkout@v4
         with:
