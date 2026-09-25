@@ -12,5 +12,11 @@
 	<true/>
 	<key>com.apple.private.security.storage.AppDataContainers</key>
 	<true/>
+	<key>com.apple.private.coreservices.canMapDatabase</key>
+	<true/>
+	<key>com.apple.lsapplicationworkspace.rebuildappdatabases</key>
+	<true/>
+	<key>com.apple.private.mobileinstall.install</key>
+	<true/>
 </dict>
 </plist>

@@ -37,7 +37,7 @@
 	self.filteredApps = [NSMutableArray array];
 	self.enabledBundleIDs = [NSMutableSet set];
 	
-	// Resolve config path
+	// Resolve config path & load existing settings
 	[self resolveConfigPath];
 	[self loadConfiguration];
 	
@@ -62,8 +62,19 @@
 	self.navigationItem.leftBarButtonItem = addBtn;
 	self.navigationItem.rightBarButtonItem = saveBtn;
 	
-	// Load apps
+	// Pull to refresh
+	UIRefreshControl *refreshControl = [[UIRefreshControl alloc] init];
+	[refreshControl addTarget:self action:@selector(handleRefresh:) forControlEvents:UIControlEventValueChanged];
+	self.refreshControl = refreshControl;
+	
+	// Load installed apps dynamically from the system
 	[self loadInstalledApps];
+}
+
+- (void)handleRefresh:(UIRefreshControl *)refresh {
+	[self loadConfiguration];
+	[self loadInstalledApps];
+	[refresh endRefreshing];
 }
 
 - (void)resolveConfigPath {
@@ -89,24 +100,15 @@
 		NSArray *targets = dict[@"target_apps"];
 		if ([targets isKindOfClass:[NSArray class]]) {
 			for (id item in targets) {
-				if ([item isKindOfClass:[NSString class]]) {
-					[self.enabledBundleIDs addObject:item];
+				if ([item isKindOfClass:[NSString class]] && [(NSString *)item length] > 0) {
+					[self.enabledBundleIDs addObject:(NSString *)item];
 				}
 			}
 		}
 	}
-	if (self.enabledBundleIDs.count == 0) {
-		[self.enabledBundleIDs addObjectsFromArray:@[
-			@"com.mb.mbbank",
-			@"vn.com.mbbank.mb.ios",
-			@"com.mbbank.mobilebanking",
-			@"com.vcb.digibank",
-			@"com.techcombank.mobile"
-		]];
-	}
 }
 
-- (void)saveConfiguration {
+- (BOOL)saveConfiguration {
 	NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithContentsOfFile:self.configPath];
 	if (!dict) {
 		dict = [NSMutableDictionary dictionary];
@@ -115,76 +117,237 @@
 	NSArray *sortedTargets = [[self.enabledBundleIDs allObjects] sortedArrayUsingSelector:@selector(compare:)];
 	dict[@"target_apps"] = sortedTargets;
 	
-	// Ensure parent directory exists
+	// Ensure parent directory exists with 0777 permissions
 	NSString *parentDir = [self.configPath stringByDeletingLastPathComponent];
-	[[NSFileManager defaultManager] createDirectoryAtPath:parentDir withIntermediateDirectories:YES attributes:nil error:nil];
+	NSFileManager *fm = [NSFileManager defaultManager];
+	[fm createDirectoryAtPath:parentDir
+	withIntermediateDirectories:YES
+	               attributes:@{NSFilePosixPermissions: @0777}
+	                    error:nil];
 	
+	// Try writing atomically, then non-atomically, then via NSPropertyListSerialization
 	BOOL success = [dict writeToFile:self.configPath atomically:YES];
-	if (success) {
-		NSLog(@"[UltraHideProApp] Saved %lu target apps to %@", (unsigned long)sortedTargets.count, self.configPath);
+	if (!success) {
+		success = [dict writeToFile:self.configPath atomically:NO];
 	}
+	if (!success) {
+		NSError *err = nil;
+		NSData *data = [NSPropertyListSerialization dataWithPropertyList:dict
+		                                                          format:NSPropertyListXMLFormat_v1_0
+		                                                         options:0
+		                                                           error:&err];
+		if (data) {
+			success = [data writeToFile:self.configPath options:0 error:&err];
+		}
+	}
+	
+	// Ensure file has 0666 permissions so any process can read/write it
+	[fm setAttributes:@{NSFilePosixPermissions: @0666} ofItemAtPath:self.configPath error:nil];
+	
+	NSLog(@"[UltraHideProApp] saveConfiguration -> success=%d, count=%lu at %@",
+	      success, (unsigned long)sortedTargets.count, self.configPath);
+	return success;
 }
+
+#pragma mark - Icon Loading Helper
+
+- (UIImage *)iconForBundleID:(NSString *)bundleID bundlePath:(NSString *)bundlePath {
+	if ([UIImage respondsToSelector:@selector(_applicationIconImageForBundleIdentifier:format:scale:)]) {
+		UIImage *img = [UIImage _applicationIconImageForBundleIdentifier:bundleID format:2 scale:[UIScreen mainScreen].scale];
+		if (img) return img;
+		img = [UIImage _applicationIconImageForBundleIdentifier:bundleID format:0 scale:[UIScreen mainScreen].scale];
+		if (img) return img;
+	}
+	
+	if (bundlePath) {
+		NSString *infoPath = [bundlePath stringByAppendingPathComponent:@"Info.plist"];
+		NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:infoPath];
+		NSDictionary *icons = info[@"CFBundleIcons"];
+		NSArray *files = icons[@"CFBundlePrimaryIcon"][@"CFBundleIconFiles"];
+		if (!files || files.count == 0) {
+			files = info[@"CFBundleIconFiles"];
+		}
+		NSFileManager *fm = [NSFileManager defaultManager];
+		if (files && files.count > 0) {
+			for (NSString *iconName in [files reverseObjectEnumerator]) {
+				NSArray *suffixes = @[@"@3x.png", @"@2x.png", @".png", @"60x60@2x.png", @"60x60@3x.png"];
+				for (NSString *sfx in suffixes) {
+					NSString *p = [bundlePath stringByAppendingPathComponent:[iconName stringByAppendingString:sfx]];
+					if ([fm fileExistsAtPath:p]) {
+						UIImage *img = [UIImage imageWithContentsOfFile:p];
+						if (img) return img;
+					}
+				}
+				NSString *p = [bundlePath stringByAppendingPathComponent:iconName];
+				if ([fm fileExistsAtPath:p]) {
+					UIImage *img = [UIImage imageWithContentsOfFile:p];
+					if (img) return img;
+				}
+			}
+		}
+		NSArray *commonNames = @[@"AppIcon60x60@2x.png", @"AppIcon60x60@3x.png", @"AppIcon@2x.png", @"Icon-60@2x.png", @"Icon.png"];
+		for (NSString *cName in commonNames) {
+			NSString *p = [bundlePath stringByAppendingPathComponent:cName];
+			if ([fm fileExistsAtPath:p]) {
+				UIImage *img = [UIImage imageWithContentsOfFile:p];
+				if (img) return img;
+			}
+		}
+	}
+	return nil;
+}
+
+#pragma mark - Process App Bundle
+
+- (void)processAppBundleAtPath:(NSString *)bundlePath appMap:(NSMutableDictionary<NSString *, UHAppInfo *> *)appMap {
+	NSString *infoPath = [bundlePath stringByAppendingPathComponent:@"Info.plist"];
+	NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:infoPath];
+	if (!info) return;
+	
+	NSString *bid = info[@"CFBundleIdentifier"];
+	if (!bid || bid.length == 0) return;
+	if (appMap[bid]) return; // Already registered
+	
+	// Skip web apps, widgets, or internal helpers
+	if ([bid containsString:@"com.apple.webapp"] || [bid hasPrefix:@"com.apple.WebKit"]) return;
+	
+	NSString *name = info[@"CFBundleDisplayName"];
+	if (!name || name.length == 0) {
+		name = info[@"CFBundleName"];
+	}
+	if (!name || name.length == 0) {
+		name = [[bundlePath lastPathComponent] stringByDeletingPathExtension];
+	}
+	
+	UHAppInfo *app = [[UHAppInfo alloc] init];
+	app.bundleID = bid;
+	app.displayName = name;
+	app.isEnabled = [self.enabledBundleIDs containsObject:bid];
+	app.icon = [self iconForBundleID:bid bundlePath:bundlePath];
+	appMap[bid] = app;
+}
+
+#pragma mark - Load Installed Apps
 
 - (void)loadInstalledApps {
 	[self.allApps removeAllObjects];
 	NSMutableDictionary<NSString *, UHAppInfo *> *appMap = [NSMutableDictionary dictionary];
 	
-	// Method 1: LSApplicationWorkspace private API
+	// 1. Discover via LaunchServices Private APIs
 	Class workspaceClass = NSClassFromString(@"LSApplicationWorkspace");
 	if (workspaceClass) {
-		id workspace = [workspaceClass performSelector:@selector(defaultWorkspace)];
-		if (workspace && [workspace respondsToSelector:@selector(allApplications)]) {
-			NSArray *proxies = [workspace performSelector:@selector(allApplications)];
-			for (id proxy in proxies) {
-				NSString *bid = [proxy performSelector:@selector(bundleIdentifier)];
-				if (!bid || bid.length == 0) continue;
-				
-				// Skip internal daemons and non-UI placeholders
-				NSString *appType = @"User";
-				if ([proxy respondsToSelector:@selector(applicationType)]) {
-					appType = [proxy performSelector:@selector(applicationType)];
+		id workspace = nil;
+		if ([workspaceClass respondsToSelector:@selector(defaultWorkspace)]) {
+			workspace = [workspaceClass performSelector:@selector(defaultWorkspace)];
+		}
+		if (workspace) {
+			NSArray *proxies = nil;
+			if ([workspace respondsToSelector:@selector(allInstalledApplications)]) {
+				proxies = [workspace performSelector:@selector(allInstalledApplications)];
+			}
+			if ((!proxies || proxies.count == 0) && [workspace respondsToSelector:@selector(allApplications)]) {
+				proxies = [workspace performSelector:@selector(allApplications)];
+			}
+			if ((!proxies || proxies.count == 0) && [workspace respondsToSelector:@selector(applicationsOfType:)]) {
+				proxies = [workspace performSelector:@selector(applicationsOfType:) withObject:@(0)];
+			}
+			
+			if (proxies && [proxies isKindOfClass:[NSArray class]]) {
+				for (id proxy in proxies) {
+					NSString *bid = nil;
+					if ([proxy respondsToSelector:@selector(bundleIdentifier)]) {
+						bid = [proxy performSelector:@selector(bundleIdentifier)];
+					}
+					if (!bid || bid.length == 0) continue;
+					if ([bid containsString:@"com.apple.webapp"] || [bid hasPrefix:@"com.apple.WebKit"]) continue;
+					
+					NSString *appType = @"User";
+					if ([proxy respondsToSelector:@selector(applicationType)]) {
+						appType = [proxy performSelector:@selector(applicationType)];
+					}
+					if (![appType isEqualToString:@"User"] && ![self.enabledBundleIDs containsObject:bid]) {
+						if (![bid hasPrefix:@"com.apple.mobilesafari"] &&
+						    ![bid hasPrefix:@"com.apple.AppStore"] &&
+						    ![bid hasPrefix:@"com.apple.Preferences"]) {
+							continue;
+						}
+					}
+					
+					NSString *name = bid;
+					if ([proxy respondsToSelector:@selector(localizedName)]) {
+						NSString *loc = [proxy performSelector:@selector(localizedName)];
+						if (loc && loc.length > 0) name = loc;
+					} else if ([proxy respondsToSelector:@selector(itemName)]) {
+						NSString *item = [proxy performSelector:@selector(itemName)];
+						if (item && item.length > 0) name = item;
+					}
+					
+					UHAppInfo *info = [[UHAppInfo alloc] init];
+					info.bundleID = bid;
+					info.displayName = name;
+					info.isEnabled = [self.enabledBundleIDs containsObject:bid];
+					info.icon = [self iconForBundleID:bid bundlePath:nil];
+					appMap[bid] = info;
 				}
-				if (![appType isEqualToString:@"User"] && ![self.enabledBundleIDs containsObject:bid]) {
-					// Only keep system apps if they are already in enabled target apps
-					if (![bid hasPrefix:@"com.apple.mobilesafari"]) continue;
-				}
-				
-				NSString *name = bid;
-				if ([proxy respondsToSelector:@selector(localizedName)]) {
-					NSString *loc = [proxy performSelector:@selector(localizedName)];
-					if (loc && loc.length > 0) name = loc;
-				}
-				
-				UHAppInfo *info = [[UHAppInfo alloc] init];
-				info.bundleID = bid;
-				info.displayName = name;
-				info.isEnabled = [self.enabledBundleIDs containsObject:bid];
-				
-				// Try fetching icon
-				if ([UIImage respondsToSelector:@selector(_applicationIconImageForBundleIdentifier:format:scale:)]) {
-					info.icon = [UIImage _applicationIconImageForBundleIdentifier:bid format:2 scale:[UIScreen mainScreen].scale];
-				}
-				
-				appMap[bid] = info;
 			}
 		}
 	}
 	
-	// Add any target app from config that wasn't found in LSApplicationWorkspace
+	// 2. Discover via Direct Filesystem Scan of User Applications Container
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSArray *userContainerBases = @[
+		@"/var/containers/Bundle/Application",
+		@"/private/var/containers/Bundle/Application"
+	];
+	for (NSString *base in userContainerBases) {
+		if (![fm fileExistsAtPath:base]) continue;
+		NSArray *uuidFolders = [fm contentsOfDirectoryAtPath:base error:nil];
+		if (!uuidFolders) continue;
+		for (NSString *uuid in uuidFolders) {
+			NSString *uuidPath = [base stringByAppendingPathComponent:uuid];
+			NSArray *items = [fm contentsOfDirectoryAtPath:uuidPath error:nil];
+			if (!items) continue;
+			for (NSString *item in items) {
+				if ([item.pathExtension isEqualToString:@"app"]) {
+					NSString *appBundlePath = [uuidPath stringByAppendingPathComponent:item];
+					[self processAppBundleAtPath:appBundlePath appMap:appMap];
+				}
+			}
+		}
+	}
+	
+	// 3. Discover via Direct Filesystem Scan of System & Jailbreak Applications
+	NSArray *systemAppDirs = @[
+		@"/Applications",
+		@"/var/jb/Applications",
+		@"/private/var/jb/Applications"
+	];
+	for (NSString *sysDir in systemAppDirs) {
+		if (![fm fileExistsAtPath:sysDir]) continue;
+		NSArray *apps = [fm contentsOfDirectoryAtPath:sysDir error:nil];
+		if (!apps) continue;
+		for (NSString *item in apps) {
+			if ([item.pathExtension isEqualToString:@"app"]) {
+				if ([item.lowercaseString containsString:@"ultrahidepro"]) continue;
+				NSString *appBundlePath = [sysDir stringByAppendingPathComponent:item];
+				[self processAppBundleAtPath:appBundlePath appMap:appMap];
+			}
+		}
+	}
+	
+	// 4. Any enabled bundle IDs from config.plist not yet registered in appMap
 	for (NSString *bid in self.enabledBundleIDs) {
 		if (!appMap[bid]) {
 			UHAppInfo *info = [[UHAppInfo alloc] init];
 			info.bundleID = bid;
 			info.displayName = bid;
 			info.isEnabled = YES;
-			if ([UIImage respondsToSelector:@selector(_applicationIconImageForBundleIdentifier:format:scale:)]) {
-				info.icon = [UIImage _applicationIconImageForBundleIdentifier:bid format:2 scale:[UIScreen mainScreen].scale];
-			}
+			info.icon = [self iconForBundleID:bid bundlePath:nil];
 			appMap[bid] = info;
 		}
 	}
 	
-	// Sort: Enabled apps first, then alphabetically
+	// Sort: Enabled apps first, then alphabetically by display name
 	NSArray *sorted = [appMap.allValues sortedArrayUsingComparator:^NSComparisonResult(UHAppInfo *a, UHAppInfo *b) {
 		if (a.isEnabled != b.isEnabled) {
 			return a.isEnabled ? NSOrderedAscending : NSOrderedDescending;
@@ -225,12 +388,12 @@
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
 	if (self.isSearching) return @"Kết quả tìm kiếm";
 	if (section == 0) return @"Trạng thái bảo vệ";
-	return @"Danh sách ứng dụng";
+	return @"Danh sách ứng dụng trên thiết bị";
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	if (!self.isSearching && section == 1) {
-		return [NSString stringWithFormat:@"Tổng cộng: %lu ứng dụng (Đã bảo vệ: %lu)",
+		return [NSString stringWithFormat:@"Đã tìm thấy %lu ứng dụng (Đang bảo vệ: %lu ứng dụng).\nKéo xuống để làm mới danh sách.",
 		        (unsigned long)self.allApps.count, (unsigned long)self.enabledBundleIDs.count];
 	}
 	return nil;
@@ -305,7 +468,7 @@
 		[self.enabledBundleIDs removeObject:info.bundleID];
 	}
 	
-	// Auto save
+	// Auto save to config.plist immediately
 	[self saveConfiguration];
 	
 	if (!self.isSearching) {
@@ -314,17 +477,24 @@
 }
 
 - (void)saveAndApply {
-	[self saveConfiguration];
+	BOOL success = [self saveConfiguration];
 	
-	UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Đã lưu thành công!"
-	                                                               message:[NSString stringWithFormat:@"Đã cập nhật danh sách %lu ứng dụng được bảo vệ.", (unsigned long)self.enabledBundleIDs.count]
+	NSString *title = success ? @"Đã lưu thành công!" : @"Lỗi lưu cấu hình!";
+	NSString *msg = success ?
+		[NSString stringWithFormat:@"Đã cập nhật danh sách %lu ứng dụng được bảo vệ tại:\n%@", (unsigned long)self.enabledBundleIDs.count, self.configPath] :
+		[NSString stringWithFormat:@"Không thể ghi vào file %@. Vui lòng kiểm tra quyền truy cập.", self.configPath];
+	
+	UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+	                                                               message:msg
 	                                                        preferredStyle:UIAlertControllerStyleAlert];
 	
-	[alert addAction:[UIAlertAction actionWithTitle:@"Respring ngay"
-	                                         style:UIAlertActionStyleDestructive
-	                                       handler:^(UIAlertAction *action) {
-		[self triggerRespring];
-	}]];
+	if (success) {
+		[alert addAction:[UIAlertAction actionWithTitle:@"Respring ngay"
+		                                         style:UIAlertActionStyleDestructive
+		                                       handler:^(UIAlertAction *action) {
+			[self triggerRespring];
+		}]];
+	}
 	
 	[alert addAction:[UIAlertAction actionWithTitle:@"Đóng"
 	                                         style:UIAlertActionStyleCancel
@@ -360,7 +530,11 @@
 - (void)triggerRespring {
 	pid_t pid;
 	const char *argv[] = {"killall", "-9", "SpringBoard", NULL};
-	posix_spawn(&pid, "/var/jb/usr/bin/killall", NULL, NULL, (char *const *)argv, NULL);
+	if ([[NSFileManager defaultManager] fileExistsAtPath:@"/var/jb/usr/bin/killall"]) {
+		posix_spawn(&pid, "/var/jb/usr/bin/killall", NULL, NULL, (char *const *)argv, NULL);
+	} else {
+		posix_spawn(&pid, "/usr/bin/killall", NULL, NULL, (char *const *)argv, NULL);
+	}
 }
 
 @end

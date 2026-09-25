@@ -58,6 +58,8 @@ after-stage::
 	mkdir -p $(THEOS_STAGING_DIR)/Library/UltraHidePro
 	cp -f Resources/config.plist $(THEOS_STAGING_DIR)/Library/UltraHidePro/config.plist 2>/dev/null || true
 	cp -f Resources/vectors.json $(THEOS_STAGING_DIR)/Library/UltraHidePro/vectors.json 2>/dev/null || true
+	chmod 0777 $(THEOS_STAGING_DIR)/Library/UltraHidePro 2>/dev/null || true
+	chmod 0666 $(THEOS_STAGING_DIR)/Library/UltraHidePro/config.plist 2>/dev/null || true
 	find $(THEOS_STAGING_DIR) -name "UltraHidePro.app" -type d -exec cp -f app/Info.plist {}/Info.plist \; 2>/dev/null || true
 	find $(THEOS_STAGING_DIR) -name "UltraHidePro.app" -type d -exec chmod -R 0755 {} \; 2>/dev/null || true
 	find $(THEOS_STAGING_DIR) -name "Info.plist" -type f -exec chmod 0644 {} \; 2>/dev/null || true

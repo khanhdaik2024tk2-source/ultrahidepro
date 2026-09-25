@@ -18,4 +18,11 @@ if [ -d "$APP_PATH" ]; then
     fi
 fi
 
+# Ensure config directory and file are writable by mobile user
+mkdir -p /var/jb/Library/UltraHidePro 2>/dev/null || true
+chmod 0777 /var/jb/Library/UltraHidePro 2>/dev/null || true
+if [ -f /var/jb/Library/UltraHidePro/config.plist ]; then
+    chmod 0666 /var/jb/Library/UltraHidePro/config.plist 2>/dev/null || true
+fi
+
 exit 0
