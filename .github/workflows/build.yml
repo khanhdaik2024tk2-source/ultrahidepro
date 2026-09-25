@@ -100,11 +100,22 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install ldid jq xz perl
-          # Theos's `make package` rule uses dm.pl which lives in the
-          # theos/vendor tree but pulls Perl modules from CPAN. Make sure
-          # perl can locate them.
-          perl -e 'use MIME::Base64; use Getopt::Long; use File::Path; use File::Copy; print "perl OK\n";'
+          brew install ldid jq xz perl gnu-make
+          # Theos's makefiles use GNU-make specific extensions (ifeq,
+          # $(wildcard), define, ...). Xcode's BSD make will silently
+          # misinterpret them and trip over dm.pl. Force gmake via PATH
+          # so `make` resolves to GNU make.
+          echo "/opt/homebrew/opt/gnu-make/libexec/gnubin" >> "$GITHUB_PATH"
+          # Verify the override took effect before we run make.
+          (which gmake && gmake --version | head -n1) || true
+          make --version | head -n1
+          # dm.pl requires lzma / xz support; ensure both binaries exist.
+          which lzma || true
+          which xz || true
+          # Sanity: dm.pl location is at $THEOS/bin/dm.pl. Make sure it
+          # is on PERL5LIB and executable.
+          ls -l /opt/theos/bin/dm.pl
+          echo "PERL5LIB=$PERL5LIB"
 
       - name: Cache iOS 18.6 SDK
         id: cache-sdk
