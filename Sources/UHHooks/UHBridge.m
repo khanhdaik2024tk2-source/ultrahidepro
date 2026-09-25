@@ -33,18 +33,6 @@ static BOOL gUHBridgeFirstScanDone = NO;
 static dispatch_queue_t gUHBridgeQueue = NULL;
 static BOOL gUHBridgeRescanScheduled = NO;
 
-// Bool returns.
-static BOOL (*_orig_amIJailbroken_inst)(id, SEL) = NULL;
-static BOOL (*_orig_amIJailbroken_cls)(id, SEL) = NULL;
-static BOOL (*_orig_isJailbroken_inst)(id, SEL) = NULL;
-static BOOL (*_orig_amIDebugged_inst)(id, SEL) = NULL;
-static BOOL (*_orig_isDebugged_inst)(id, SEL) = NULL;
-static BOOL (*_orig_amIRuntimeHooked_inst)(id, SEL) = NULL;
-static BOOL (*_orig_amIReverseEngineered_inst)(id, SEL) = NULL;
-static BOOL (*_orig_amITampered_inst)(id, SEL) = NULL;
-static BOOL (*_orig_verifyIntegrity_inst)(id, SEL) = NULL;
-static BOOL (*_orig_isCompromised_inst)(id, SEL) = NULL;
-
 // Forced return values per selector.
 static BOOL UHBoolReturnFor(SEL sel) {
 	const char *name = sel_getName(sel);
@@ -68,13 +56,11 @@ static BOOL $BOOLGenericClass(id self, SEL _cmd) {
 }
 
 // performChecks returns an NSNumber / NSInteger with FORCE_CLEAN (1).
-static NSInteger (*_orig_performChecks_inst)(id, SEL) = NULL;
 static NSInteger $performChecks_inst(id self, SEL _cmd) {
 	(void)self; (void)_cmd;
 	return 1; // FORCE_CLEAN
 }
 
-static Class (*_orig_performChecks_cls)(id, SEL) = NULL;
 static Class $performChecks_cls(id self, SEL _cmd) {
 	(void)self; (void)_cmd;
 	return Nil;
