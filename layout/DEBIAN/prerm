@@ -1,12 +1,35 @@
 #!/bin/sh
 APP_PATH="/var/jb/Applications/UltraHidePro.app"
 
-if [ -x /var/jb/usr/bin/uicache ]; then
-    /var/jb/usr/bin/uicache -u "$APP_PATH" 2>/dev/null || true
-    /var/jb/usr/bin/uicache -a 2>/dev/null || true
-elif which uicache >/dev/null 2>&1; then
-    uicache -u "$APP_PATH" 2>/dev/null || true
-    uicache -a 2>/dev/null || true
+UICACHE=""
+for P in /var/jb/usr/bin/uicache /usr/bin/uicache; do
+    if [ -x "$P" ]; then
+        UICACHE="$P"
+        break
+    fi
+done
+if [ -z "$UICACHE" ] && which uicache >/dev/null 2>&1; then
+    UICACHE="$(which uicache)"
+fi
+
+run_as_mobile() {
+    CMD="$1"
+    if which su >/dev/null 2>&1; then
+        su -c "$CMD" mobile 2>/dev/null || su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
+    elif [ -x /bin/su ]; then
+        /bin/su -c "$CMD" mobile 2>/dev/null || /bin/su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
+    elif [ -x /var/jb/bin/su ]; then
+        /var/jb/bin/su -c "$CMD" mobile 2>/dev/null || /var/jb/bin/su mobile -c "$CMD" 2>/dev/null || eval "$CMD" 2>/dev/null || true
+    else
+        eval "$CMD" 2>/dev/null || true
+    fi
+}
+
+if [ -n "$UICACHE" ]; then
+    run_as_mobile "$UICACHE -u '$APP_PATH'"
+    "$UICACHE" -u "$APP_PATH" 2>/dev/null || true
+    run_as_mobile "$UICACHE -a"
+    "$UICACHE" -a 2>/dev/null || true
 fi
 
 exit 0
