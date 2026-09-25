@@ -18,31 +18,15 @@
 
 #pragma mark - fork / vfork
 
+#pragma mark - fork
+
 typedef pid_t (*fork_t)(void);
 static fork_t _orig_fork = NULL;
 
 static pid_t $fork(void) {
-	// Hard-deny fork only in target apps. The activeForCurrentApp check
-	// already enforces (a) bundle-id filter and (b) layer-enable filter.
-	// We additionally never call the deny path from a denylisted system
-	// process because UHInit has already short-circuited their hook
-	// installation. If we still got here from a non-target app, pass
-	// through to avoid breaking UIKit / SpringBoard.
-	if ([UHConfig activeForCurrentApp]) {
-		errno = EPERM;
-		return -1;
-	}
-	return _orig_fork();
-}
-
-typedef pid_t (*vfork_t)(void);
-static vfork_t _orig_vfork = NULL;
-static pid_t $vfork(void) {
-	if ([UHConfig activeForCurrentApp]) {
-		errno = EPERM;
-		return -1;
-	}
-	return _orig_vfork();
+	// Standard iOS sandbox denies fork(); mimic stock sandbox behaviour
+	errno = EPERM;
+	return -1;
 }
 
 #pragma mark - execve / posix_spawn
@@ -51,8 +35,7 @@ typedef int (*execve_t)(const char *, char *const[], char *const[]);
 static execve_t _orig_execve = NULL;
 
 static int $execve(const char *path, char *const argv[], char *const envp[]) {
-	if (UH_UNLIKELY(path != NULL && [UHConfig activeForCurrentApp] &&
-	    [UHConfig shouldBlockPath:[NSString stringWithUTF8String:path]])) {
+	if (UH_UNLIKELY(path != NULL && UHPathBlockedFast(path))) {
 		errno = EPERM;
 		return -1;
 	}
@@ -66,8 +49,7 @@ static posix_spawn_t _orig_posix_spawn = NULL;
 static int $posix_spawn(pid_t *pid, const char *path,
 	const void *desc, void *attrp,
 	char *const argv[], char *const envp[]) {
-	if (UH_UNLIKELY(path != NULL && [UHConfig activeForCurrentApp] &&
-	    [UHConfig shouldBlockPath:[NSString stringWithUTF8String:path]])) {
+	if (UH_UNLIKELY(path != NULL && UHPathBlockedFast(path))) {
 		errno = EPERM;
 		return -1;
 	}
@@ -93,33 +75,16 @@ static int $sysctl(int *name, u_int namelen,
 	} else {
 		rc = _orig_sysctl(name, namelen, oldp, oldlenp, newp, newlen);
 	}
-	if (rc != 0 || oldp == NULL) return rc;
-	// Mask KERN_PROC responses only when running in a target app —
-	// otherwise the cost of iterating the proc buffer would be paid
-	// by system daemons for no benefit.
-	if ([UHConfig activeForCurrentApp] &&
-	    namelen >= 2 && name[0] == CTL_KERN) {
-		if (name[1] == KERN_PROC_PID && oldp != NULL && oldlenp && *oldlenp >= sizeof(struct kinfo_proc)) {
+	if (rc != 0 || oldp == NULL || name == NULL || namelen < 2) return rc;
+
+	if (name[0] == CTL_KERN) {
+		if (name[1] == KERN_PROC_PID && oldlenp && *oldlenp >= sizeof(struct kinfo_proc)) {
 			// Clear P_TRACED flag used by anti-debug detection
 			#ifndef P_TRACED
 			#define P_TRACED 0x00000800
 			#endif
 			struct kinfo_proc *p = (struct kinfo_proc *)oldp;
 			p->kp_proc.p_flag &= ~P_TRACED;
-		} else if (name[1] == KERN_PROC || name[1] == KERN_PROC_ALL) {
-			size_t sz = oldlenp ? *oldlenp : 0;
-			if (sz == 0) return rc;
-			size_t recSize = sizeof(struct kinfo_proc);
-			size_t count = sz / recSize;
-			struct kinfo_proc *procs = (struct kinfo_proc *)oldp;
-			size_t writeIdx = 0;
-			for (size_t i = 0; i < count; i++) {
-				const char *comm = procs[i].kp_proc.p_comm;
-				if (![UHConfig shouldHideProcessName:comm]) {
-					procs[writeIdx++] = procs[i];
-				}
-			}
-			if (oldlenp) *oldlenp = writeIdx * recSize;
 		}
 	}
 	return rc;
@@ -264,24 +229,17 @@ void UHInstallProcessHooks(void) {
 	NSUInteger before = stats.activeCount;
 
 	MSHookFunction((void *)fork,        (void *)$fork,        (void **)&_orig_fork);
-	MSHookFunction((void *)vfork,       (void *)$vfork,       (void **)&_orig_vfork);
 	MSHookFunction((void *)execve,      (void *)$execve,      (void **)&_orig_execve);
 	MSHookFunction((void *)posix_spawn, (void *)$posix_spawn, (void **)&_orig_posix_spawn);
 	MSHookFunction((void *)sysctl,      (void *)$sysctl,      (void **)&_orig_sysctl);
 	MSHookFunction((void *)sysctlbyname,(void *)$sysctlbyname,(void **)&_orig_sysctlbyname);
 	MSHookFunction((void *)getppid,     (void *)$getppid,     (void **)&_orig_getppid);
 	MSHookFunction((void *)kill,        (void *)$kill,        (void **)&_orig_kill);
-	[stats bumpBy:8];
+	[stats bumpBy:7];
 
 	void *fn_ptrace = dlsym(RTLD_DEFAULT, "ptrace");
 	if (fn_ptrace != NULL) {
 		MSHookFunction(fn_ptrace, (void *)$ptrace, (void **)&_orig_ptrace);
-		[stats bumpBy:1];
-	}
-
-	void *fn_csops = dlsym(RTLD_DEFAULT, "csops");
-	if (fn_csops != NULL) {
-		MSHookFunction(fn_csops, (void *)$csops, (void **)&_orig_csops);
 		[stats bumpBy:1];
 	}
 

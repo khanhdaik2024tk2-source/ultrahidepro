@@ -19,8 +19,7 @@ typedef void *(*dlopen_t)(const char *, int);
 static dlopen_t _orig_dlopen = NULL;
 
 static void *$dlopen(const char *path, int mode) {
-	if (UH_UNLIKELY(path != NULL && [UHConfig shouldBlockPath:
-		[NSString stringWithUTF8String:path]])) {
+	if (UH_UNLIKELY(path != NULL && UHPathBlockedFast(path))) {
 		UHLogDebugF(@"dlopen: blocked %s", path);
 		return NULL;
 	}
@@ -65,9 +64,9 @@ static dlsym_t _orig_dlsym = NULL;
 static void *$dlsym(void *handle, const char *symbol) {
 	if (UH_UNLIKELY(symbol != NULL && UHDyldIsHiddenSymbolPrefix(symbol))) {
 		Dl_info info;
-		if (handle != NULL && dladdr(handle, &info) != 0 &&
+		if (dladdr(__builtin_return_address(0), &info) != 0 &&
 		    info.dli_fname != NULL &&
-		    [UHMachO isTweakPath:info.dli_fname]) {
+		    UHMachOIsTweakPathFast(info.dli_fname)) {
 			return _orig_dlsym(handle, symbol);
 		}
 		UHLogDebugF(@"dlsym: hid %s", symbol);
@@ -84,7 +83,7 @@ static dladdr_t _orig_dladdr = NULL;
 static int $dladdr(const void *addr, Dl_info *info) {
 	int rc = _orig_dladdr(addr, info);
 	if (rc != 0 && info != NULL && info->dli_fname != NULL) {
-		if (UH_UNLIKELY([UHMachO isTweakPath:info->dli_fname])) {
+		if (UH_UNLIKELY(UHMachOIsTweakPathFast(info->dli_fname))) {
 			info->dli_fname = "/usr/lib/system/libsystem_trace.dylib";
 		}
 	}

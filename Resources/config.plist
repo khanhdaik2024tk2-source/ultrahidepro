@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>version</key>
-	<string>1.1.5</string>
+	<string>1.1.6</string>
 
 	<!-- Bundle IDs that get full bypass. If empty -> bypass every process. -->
 	<key>target_apps</key>

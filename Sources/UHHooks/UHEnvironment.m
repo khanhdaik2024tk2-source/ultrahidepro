@@ -103,39 +103,7 @@ static BOOL $lsap_appIsInstalled_(id self, SEL _cmd, NSString *bundleID) {
 	return _orig_lsap_appIsInstalled_(self, _cmd, bundleID);
 }
 
-static NSArray *(*_orig_lsaw_allApplications)(id, SEL) = NULL;
-static NSArray *$lsaw_allApplications(id self, SEL _cmd) {
-	NSArray *apps = _orig_lsaw_allApplications(self, _cmd);
-	if (!apps || ![UHConfig activeForCurrentApp]) return apps;
-	NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:apps.count];
-	for (id app in apps) {
-		if ([app respondsToSelector:@selector(bundleIdentifier)]) {
-			NSString *bid = [app performSelector:@selector(bundleIdentifier)];
-			if (bid != nil && [UHConfig shouldBlockBundleID:bid]) {
-				continue;
-			}
-		}
-		[filtered addObject:app];
-	}
-	return [filtered copy];
-}
 
-static NSArray *(*_orig_lsaw_allInstalledApplications)(id, SEL) = NULL;
-static NSArray *$lsaw_allInstalledApplications(id self, SEL _cmd) {
-	NSArray *apps = _orig_lsaw_allInstalledApplications(self, _cmd);
-	if (!apps || ![UHConfig activeForCurrentApp]) return apps;
-	NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:apps.count];
-	for (id app in apps) {
-		if ([app respondsToSelector:@selector(bundleIdentifier)]) {
-			NSString *bid = [app performSelector:@selector(bundleIdentifier)];
-			if (bid != nil && [UHConfig shouldBlockBundleID:bid]) {
-				continue;
-			}
-		}
-		[filtered addObject:app];
-	}
-	return [filtered copy];
-}
 
 #pragma mark - Installer
 
@@ -169,11 +137,7 @@ void UHInstallEnvironmentHooks(void) {
 	if (lsaw != NULL) {
 		MSHookMessageEx(lsaw, @selector(applicationIsInstalled:),
 			(IMP)$lsaw_appIsInstalled_, (IMP *)&_orig_lsaw_appIsInstalled_);
-		MSHookMessageEx(lsaw, @selector(allApplications),
-			(IMP)$lsaw_allApplications, (IMP *)&_orig_lsaw_allApplications);
-		MSHookMessageEx(lsaw, @selector(allInstalledApplications),
-			(IMP)$lsaw_allInstalledApplications, (IMP *)&_orig_lsaw_allInstalledApplications);
-		[stats bumpBy:3];
+		[stats bumpBy:1];
 	}
 	Class lsap = NSClassFromString(@"LSApplicationProxy");
 	if (lsap != NULL) {

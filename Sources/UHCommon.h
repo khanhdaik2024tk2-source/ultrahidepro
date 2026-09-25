@@ -78,6 +78,126 @@ static inline bool UHStringHasPrefixCI(NSString *str, NSString *prefix) {
 	                           NSAnchoredSearch)].location != NSNotFound;
 }
 
+// Pure C fast tweak-path check (ZERO ObjC allocations, safe in all contexts)
+static inline bool UHMachOIsTweakPathFast(const char *path) {
+	if (path == NULL || path[0] == '\0') return false;
+	static const char *const tweak_patterns[] = {
+		"UltraHidePro",
+		"ultrahidepro",
+		"com.ultrahidepro",
+		"ellekit",
+		"ElleKit",
+		"libellekit",
+		"substrate",
+		"Substrate",
+		"libsubstrate",
+		"substitute",
+		"Substitute",
+		"libhooker",
+		"tweakinject",
+		"TweakInject",
+		"/var/jb",
+		"/private/var/jb",
+		"Cephei",
+		"Shadow",
+		"Choicy",
+		"TweakLoader",
+		"MobileSubstrate",
+		"dopamine",
+		"Dopamine",
+		"procursus",
+		"Procursus",
+		NULL
+	};
+	for (int i = 0; tweak_patterns[i] != NULL; i++) {
+		if (strstr(path, tweak_patterns[i]) != NULL) return true;
+	}
+	return false;
+}
+
+// Pure C fast jailbreak path filter (ZERO ObjC allocations, safe for stat/open/lstat/access)
+static inline bool UHPathBlockedFast(const char *path) {
+	if (path == NULL || path[0] == '\0') return false;
+
+	// Fast-path: sandbox containers and system paths (99% of app calls)
+	if (strncmp(path, "/private/var/containers/", 24) == 0 ||
+	    strncmp(path, "/var/containers/", 16) == 0 ||
+	    strncmp(path, "/private/var/mobile/Containers/", 31) == 0 ||
+	    strncmp(path, "/var/mobile/Containers/", 23) == 0 ||
+	    strncmp(path, "/System/", 8) == 0) {
+		return false;
+	}
+
+	// Always allow UltraHidePro's own internal config
+	if (strstr(path, "ultrahidepro/config.plist") != NULL ||
+	    strstr(path, "UltraHidePro/config.plist") != NULL) {
+		return false;
+	}
+
+	// Dopamine rootless bootstrap in /private/preboot
+	if (strncmp(path, "/private/preboot/", 17) == 0 || strncmp(path, "/preboot/", 9) == 0) {
+		if (strstr(path, "dopamine") != NULL || strstr(path, "/jb") != NULL) {
+			return true;
+		}
+		return false;
+	}
+
+	// Direct /var/jb rootless symlink & aliases
+	if (strncmp(path, "/var/jb", 7) == 0 ||
+	    strncmp(path, "/private/var/jb", 15) == 0 ||
+	    strcmp(path, "/jb") == 0 ||
+	    strncmp(path, "/jb/", 4) == 0 ||
+	    strcmp(path, "/basebin") == 0 ||
+	    strncmp(path, "/basebin/", 9) == 0) {
+		return true;
+	}
+
+	// Exact jailbreak binaries and files
+	static const char *const jb_exact[] = {
+		"/bin/sh", "/bin/bash", "/bin/zsh",
+		"/etc/apt", "/private/etc/apt",
+		"/.bootstrapped",
+		"/usr/sbin/sshd", "/usr/bin/ssh", "/usr/bin/cycript",
+		"/usr/lib/tweakinject.dylib",
+		"/usr/lib/libsubstitute.dylib",
+		"/usr/lib/libellekit.dylib",
+		"/usr/lib/libhooker.dylib",
+		"/usr/lib/systemhook.dylib",
+		NULL
+	};
+	for (int i = 0; jb_exact[i] != NULL; i++) {
+		if (strcmp(path, jb_exact[i]) == 0) return true;
+	}
+
+	// Prefix jailbreak paths
+	static const char *const jb_prefixes[] = {
+		"/Applications/Cydia.app",
+		"/Applications/Sileo.app",
+		"/Applications/Zebra.app",
+		"/Applications/Filza.app",
+		"/Applications/UltraHidePro.app",
+		"/usr/lib/substrate",
+		"/usr/lib/ellekit",
+		"/Library/MobileSubstrate",
+		"/var/lib/dpkg",
+		"/var/lib/cydia",
+		"/var/lib/apt",
+		"/private/var/lib/cydia",
+		"/private/var/lib/apt",
+		"/private/var/stash",
+		"/private/jailbreak.txt",
+		"/private/jb_test.txt",
+		"/private/test.txt",
+		NULL
+	};
+	for (int i = 0; jb_prefixes[i] != NULL; i++) {
+		size_t len = strlen(jb_prefixes[i]);
+		if (strncasecmp(path, jb_prefixes[i], len) == 0) return true;
+	}
+
+	return false;
+}
+
 // ROOT_PATH string. We do NOT resolve to jbroot() at compile time because
 // Dopamine sets jbroot at runtime; instead we build it lazily in UHConfig.
 extern NSString *UHDefaultJBRoot(void);

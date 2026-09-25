@@ -24,9 +24,7 @@
 
 static inline bool UHPathBlocked(const char *path) {
 	if (path == NULL) return false;
-	NSString *s = [NSString stringWithUTF8String:path];
-	if (s == nil) return false;
-	return [UHConfig shouldBlockPath:s];
+	return UHPathBlockedFast(path);
 }
 
 #pragma mark - NSFileManager hooks (Objective-C)
@@ -340,7 +338,7 @@ static struct dirent *$readdir(DIR *dirp) {
 		}
 		char full[PATH_MAX];
 		snprintf(full, sizeof(full), "%s/%s", parent, e->d_name);
-		if (![UHConfig shouldBlockPath:[NSString stringWithUTF8String:full]]) {
+		if (!UHPathBlockedFast(full)) {
 			return e;
 		}
 	}

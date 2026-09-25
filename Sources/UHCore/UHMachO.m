@@ -45,12 +45,26 @@ static void UHLocateTextSegment(const struct mach_header *hdr, uintptr_t slide,
 	*outLow = 0;
 	*outHigh = 0;
 	if (hdr == NULL) return;
-	const uint8_t *cmd = (const uint8_t *)(hdr + 1);
+	const uint8_t *cmd;
+	if (hdr->magic == MH_MAGIC_64 || hdr->magic == MH_CIGAM_64) {
+		cmd = (const uint8_t *)hdr + sizeof(struct mach_header_64);
+	} else {
+		cmd = (const uint8_t *)hdr + sizeof(struct mach_header);
+	}
 	for (uint32_t i = 0; i < hdr->ncmds; i++) {
 		const struct load_command *lc = (const struct load_command *)cmd;
+		if (lc->cmdsize == 0) break;
 		if (lc->cmd == LC_SEGMENT_64) {
 			const struct segment_command_64 *seg =
 				(const struct segment_command_64 *)cmd;
+			if (strcmp(seg->segname, "__TEXT") == 0) {
+				*outLow = (uintptr_t)seg->vmaddr + slide;
+				*outHigh = *outLow + (uintptr_t)seg->vmsize;
+				return;
+			}
+		} else if (lc->cmd == LC_SEGMENT) {
+			const struct segment_command *seg =
+				(const struct segment_command *)cmd;
 			if (strcmp(seg->segname, "__TEXT") == 0) {
 				*outLow = (uintptr_t)seg->vmaddr + slide;
 				*outHigh = *outLow + (uintptr_t)seg->vmsize;
@@ -121,39 +135,7 @@ static void UHLocateTextSegment(const struct mach_header *hdr, uintptr_t slide,
 }
 
 + (BOOL)isTweakPath:(const char *)path {
-	if (path == NULL) return NO;
-	if (gOwnPath != NULL && strstr(path, [gOwnPath UTF8String]) != NULL) return YES;
-	static const char *identifiers[] = {
-		"UltraHidePro",
-		"ultrahidepro",
-		"com.ultrahidepro",
-		"ellekit",
-		"ElleKit",
-		"libellekit",
-		"substrate",
-		"Substrate",
-		"libsubstrate",
-		"substitute",
-		"Substitute",
-		"libhooker",
-		"tweakinject",
-		"TweakInject",
-		"/var/jb",
-		"Cephei",
-		"Shadow",
-		"Choicy",
-		"TweakLoader",
-		"MobileSubstrate",
-		"dopamine",
-		"Dopamine",
-		"procursus",
-		"Procursus",
-		NULL,
-	};
-	for (int i = 0; identifiers[i] != NULL; i++) {
-		if (strstr(path, identifiers[i]) != NULL) return YES;
-	}
-	return NO;
+	return UHMachOIsTweakPathFast(path);
 }
 
 + (NSString *)disguisePath {

@@ -48,7 +48,7 @@ static void UHInit(void) {
 		return;
 	}
 
-	UHLogInfo(@"UltraHide Pro v1.1.5 booting for %@", [UHConfig hostBundleID]);
+	UHLogInfo(@"UltraHide Pro v1.1.6 booting for %@", [UHConfig hostBundleID]);
 
 	// Order matters: capture PAC, capture Mach-O, then load config.
 	[UHPAC bootstrap];
