@@ -81,12 +81,10 @@ static bool UHDyldIsHiddenSymbolPrefix(const char *symbol) {
 	if (symbol[0] == '_') symbol++; // Mach-O leading underscore.
 	if (symbol[0] == '\0') return false;
 	static const char *prefixes[] = {
-		"UH",        // UltraHidePro public symbols.
-		"EK",        // ElleKit public surface.
-		"MSHook",    // substrate legacy.
-		"LH",        // libhooker legacy.
-		"ultrahidepro_tweak_",
-		"ElleKit_",
+		"MSHookFunction",
+		"MSHookMessageEx",
+		"ultrahidepro_",
+		"UltraHidePro_",
 		NULL,
 	};
 	for (size_t i = 0; prefixes[i] != NULL; i++) {
@@ -101,97 +99,16 @@ static dlsym_t _orig_dlsym = NULL;
 
 static void *$dlsym(void *handle, const char *symbol) {
 	if (UH_UNLIKELY(symbol != NULL && UHDyldIsHiddenSymbolPrefix(symbol))) {
-		// Allow the tweak itself to keep using the symbols. We
-		// approximate "self" by checking whether the calling handle's
-		// backing image is our own disguise path; if so, fall through
-		// to the real implementation.
 		Dl_info info;
 		if (handle != NULL && dladdr(handle, &info) != 0 &&
 		    info.dli_fname != NULL &&
 		    [UHMachO isTweakPath:info.dli_fname]) {
 			return _orig_dlsym(handle, symbol);
 		}
-		// Otherwise: pretend the symbol doesn't exist. This makes
-		// it impossible for an attacker to enumerate our toolkit.
 		UHLogDebugF(@"dlsym: hid %s", symbol);
-		// On platforms that require a non-NULL return, callers fall
-		// back gracefully. We follow dlsym(3) which says failure is
-		// indicated by NULL with errno=ENOENT-equivalent, but
-		// CallerHooks isn't always checking dlerror(), so we prefer
-		// a NULL for clarity.
 		return NULL;
 	}
 	return _orig_dlsym(handle, symbol);
-}
-
-#pragma mark - objc_copyClassList / objc_getClassList
-
-typedef int (*objc_copyClassList_t)(Class *, int);
-static objc_copyClassList_t _orig_objc_copyClassList = NULL;
-typedef int (*objc_getClassList_t)(Class *, int);
-static objc_getClassList_t _orig_objc_getClassList = NULL;
-
-// Cached list of classes we want to hide. Populated lazily on first call.
-static Class *gHiddenClasses = NULL;
-static int gHiddenClassesCount = 0;
-static bool gHiddenClassesScanned = false;
-
-static void UHDyldScanHiddenClasses(void) {
-	if (gHiddenClassesScanned) return;
-	int total = _orig_objc_copyClassList(NULL, 0);
-	if (total <= 0) { gHiddenClassesScanned = true; return; }
-	Class *all = (Class *)calloc((size_t)total, sizeof(Class));
-	if (all == NULL) return;
-	_orig_objc_copyClassList(all, total);
-
-	// First pass: count.
-	int hidden = 0;
-	for (int i = 0; i < total; i++) {
-		const char *name = object_getClassName((id)all[i]);
-		if (name == NULL) continue;
-		if ([UHConfig shouldHookObjCClass:name]) hidden++;
-	}
-	if (hidden == 0) {
-		free(all);
-		gHiddenClassesScanned = true;
-		return;
-	}
-	gHiddenClasses = (Class *)calloc((size_t)hidden, sizeof(Class));
-	if (gHiddenClasses == NULL) { free(all); gHiddenClassesScanned = true; return; }
-	int j = 0;
-	for (int i = 0; i < total; i++) {
-		const char *name = object_getClassName((id)all[i]);
-		if (name == NULL) continue;
-		if ([UHConfig shouldHookObjCClass:name] && j < hidden) {
-			gHiddenClasses[j++] = all[i];
-		}
-	}
-	gHiddenClassesCount = j;
-	free(all);
-	gHiddenClassesScanned = true;
-	UHLogInfoF(@"UHDyld: %d hidden classes registered", j);
-}
-
-static int $objc_copyClassList(Class *buffer, int count) {
-	int total = _orig_objc_copyClassList(buffer, count);
-	if (UH_UNLIKELY(!gHiddenClassesScanned)) UHDyldScanHiddenClasses();
-	if (gHiddenClassesCount == 0 || buffer == NULL || count == 0) return total;
-
-	// Walk through and remove hidden classes.
-	int writeIdx = 0;
-	for (int readIdx = 0; readIdx < total; readIdx++) {
-		Class c = buffer[readIdx];
-		bool isHidden = false;
-		for (int k = 0; k < gHiddenClassesCount; k++) {
-			if (gHiddenClasses[k] == c) { isHidden = true; break; }
-		}
-		if (!isHidden) buffer[writeIdx++] = c;
-	}
-	return writeIdx;
-}
-
-static int $objc_getClassList(Class *buffer, int count) {
-	return $objc_copyClassList(buffer, count);
 }
 
 #pragma mark - Installer
@@ -212,13 +129,7 @@ void UHInstallDyldHooks(void) {
 	MSHookFunction((void *)dlsym,
 	               (void *)$dlsym,
 	               (void **)&_orig_dlsym);
-	MSHookFunction((void *)objc_copyClassList,
-	               (void *)$objc_copyClassList,
-	               (void **)&_orig_objc_copyClassList);
-	MSHookFunction((void *)objc_getClassList,
-	               (void *)$objc_getClassList,
-	               (void **)&_orig_objc_getClassList);
-	[stats bumpBy:6];
+	[stats bumpBy:4];
 
 	UHLogInfoF(@"dyld hooks installed (%lu total)",
 		(unsigned long)(stats.activeCount - before));

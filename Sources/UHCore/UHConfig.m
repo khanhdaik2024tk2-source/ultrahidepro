@@ -169,6 +169,7 @@ static NSArray<NSString *> *UHConfigCopyStrings(id raw) {
 + (BOOL)shouldBlockPath:(NSString *)path {
 	if (path.length == 0) return NO;
 	NSString *lower = [path lowercaseString];
+	if ([lower containsString:@"ultrahidepro"]) return NO;
 	for (NSString *blk in [self sharedInstance].blacklistPaths) {
 		if ([lower hasPrefix:blk]) return YES;
 	}

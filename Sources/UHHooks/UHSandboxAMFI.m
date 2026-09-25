@@ -123,17 +123,7 @@ static xpc_connection_t $xpc_connection_create(const char *name, dispatch_queue_
 		if ([n hasPrefix:@"com.apple.dt.xcode"] ||
 		    [n hasPrefix:@"com.opa334.dopamine"] ||
 		    [n hasPrefix:@"com.saurik"]) {
-			// Hand back a never-connecting dummy connection so the
-			// caller doesn't dereference NULL when it later tries to
-			// send a message. We need a real heap-allocated object.
-			static xpc_connection_t sDummy = NULL;
-			static dispatch_once_t once;
-			dispatch_once(&once, ^{
-				if (_orig_xpc_connection_create != NULL) {
-					sDummy = _orig_xpc_connection_create(NULL, NULL);
-				}
-			});
-			return sDummy;
+			return NULL;
 		}
 	}
 	return _orig_xpc_connection_create(name, targetq);

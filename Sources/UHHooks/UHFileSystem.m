@@ -65,6 +65,15 @@ static NSDictionary *$NSFileManager_attributesOfItemAtPath_error_(id self, SEL _
 	return _orig_NSFileManager_attributesOfItemAtPath_error_(self, _cmd, path, error);
 }
 
+static BOOL (*_orig_NSFileManager_createFileAtPath_contents_attributes_)(id, SEL, NSString *, NSData *, NSDictionary *) = NULL;
+static BOOL $NSFileManager_createFileAtPath_contents_attributes_(id self, SEL _cmd,
+	NSString *path, NSData *data, NSDictionary *attr) {
+	if (UH_UNLIKELY(path != nil && [UHConfig shouldBlockPath:path])) {
+		return NO;
+	}
+	return _orig_NSFileManager_createFileAtPath_contents_attributes_(self, _cmd, path, data, attr);
+}
+
 #pragma mark - libc hooks (fishhook-style via MSHookFunction)
 
 // fopen
@@ -260,7 +269,11 @@ void UHInstallFileSystemHooks(void) {
 			@selector(attributesOfItemAtPath:error:),
 			(IMP)$NSFileManager_attributesOfItemAtPath_error_,
 			(IMP *)&_orig_NSFileManager_attributesOfItemAtPath_error_);
-		[stats bumpBy:3];
+		MSHookMessageEx(fm,
+			@selector(createFileAtPath:contents:attributes:),
+			(IMP)$NSFileManager_createFileAtPath_contents_attributes_,
+			(IMP *)&_orig_NSFileManager_createFileAtPath_contents_attributes_);
+		[stats bumpBy:4];
 	}
 
 	// libc hooks via ElleKit / substrate.

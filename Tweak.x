@@ -70,22 +70,6 @@ static void UHInit(void) {
 	UHConfig *cfg = [UHConfig sharedInstance];
 	[UHHookStats sharedInstance];
 
-	// Install BRK guard so multi-tweak BRK#1 recursion can't lurk in
-	// the host's signal handler chain.
-	UHInstallBrkGuard();
-
-	// Defensive: if the host is arm64e (A12+) and Dopamine 3.0.9 has
-	// not stabilised its arm64e Momentarius bypass, we currently
-	// refuse to install. The PAC-aware path will ship in a future
-	// release; for now we exit cleanly so no hooks get installed and
-	// SpringBoard stays consistent.
-	if ([UHPAC isPACAvailable]) {
-		UHLogWarnF(@"arm64e detected — UltraHide Pro has no PAC-safe hook path yet; skipping");
-		setenv("ULTRAHIDE_ACTIVE_HOOKS", "0", 1);
-		UHUninstallBrkGuard();
-		return;
-	}
-
 	if (cfg.filesystemEnabled)   UHInstallFileSystemHooks();
 	if (cfg.processEnabled)      UHInstallProcessHooks();
 	if (cfg.dyldEnabled)         UHInstallDyldHooks();
@@ -94,7 +78,6 @@ static void UHInit(void) {
 	if (cfg.networkIOKitEnabled) UHInstallNetworkIOKitHooks();
 	if (cfg.objcAggregateEnabled) UHInstallBridgeHooks();
 	UHInstallAntiHookHooks();           // always on
-	UHInstallRuntimeProtectionHooks();  // always on
 
 	if (cfg.kernelEnabled) {
 		UHInitKernelPrimitives();

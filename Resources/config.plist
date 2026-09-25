@@ -26,7 +26,7 @@
 		<key>environment</key><true/>
 		<key>sandbox_amfi</key><true/>
 		<key>network_iokit</key><true/>
-		<key>objc_aggregate</key><true/>
+		<key>objc_aggregate</key><false/>
 		<key>kernel</key><false/>
 	</dict>
 
@@ -57,16 +57,30 @@
 		<string>/usr/lib/libsubstitute.dylib</string>
 		<string>/usr/lib/substrate</string>
 		<string>/usr/lib/ellekit</string>
+		<string>/usr/lib/libellekit.dylib</string>
+		<string>/usr/lib/libhooker.dylib</string>
+		<string>/usr/lib/systemhook.dylib</string>
 		<string>/.bootstrapped</string>
 		<string>/var/cache/apt</string>
 		<string>/var/lib/dpkg</string>
+		<string>/var/lib/cydia</string>
+		<string>/var/binpack</string>
 		<string>/var/log/syslog</string>
 		<string>/usr/libexec/sftp-server</string>
 		<string>/usr/libexec/ssh-keysign</string>
 		<string>/private/var/stash</string>
+		<string>/private/var/lib/cydia</string>
+		<string>/private/var/lib/apt</string>
 		<string>/private/var/mobile/library/sbsettings</string>
 		<string>/private/var/tmp/cydia.log</string>
+		<string>/private/jailbreak.txt</string>
+		<string>/private/jb_test.txt</string>
+		<string>/private/test.txt</string>
 		<string>/library/mobilesubstrate</string>
+		<string>/library/mobilesubstrate/dynamiclibraries</string>
+		<string>/jb</string>
+		<string>/basebin</string>
+		<string>/cores/binpack</string>
 	</array>
 
 	<!-- Env vars hidden from target app's getenv. -->

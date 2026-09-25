@@ -134,11 +134,9 @@ static int $sysctlbyname(const char *name, void *oldp, size_t *oldlenp,
 	// already see the right answer; we only suppress the well-known
 	// jailbreak probes.
 	if (name != NULL) {
-		NSString *n = [NSString stringWithUTF8String:name];
-		NSString *l = [n lowercaseString];
-		if ([l hasPrefix:@"kern.jailbreak"] ||
-		    [l hasPrefix:@"security.mac.proc_enforce"] ||
-		    [l hasPrefix:@"security.mac.vnode_enforce"]) {
+		if (strncasecmp(name, "kern.jailbreak", 14) == 0 ||
+		    strncasecmp(name, "security.mac.proc_enforce", 25) == 0 ||
+		    strncasecmp(name, "security.mac.vnode_enforce", 26) == 0) {
 			errno = ENOENT;
 			return -1;
 		}
@@ -236,8 +234,7 @@ static int $csops(pid_t pid, unsigned int op, void *buffer, size_t size) {
 		if (size >= sizeof(flags)) {
 			memcpy(&flags, buffer, sizeof(flags));
 		}
-		flags = (flags & ~(UH_CS_KILL | UH_CS_HARD)) |
-			(UH_CS_VALID | UH_CS_DEBUGGED);
+		flags = (flags & ~(UH_CS_KILL | UH_CS_HARD | UH_CS_DEBUGGED)) | UH_CS_VALID;
 		memcpy(buffer, &flags, sizeof(flags));
 		break;
 	}

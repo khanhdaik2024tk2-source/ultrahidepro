@@ -27,37 +27,26 @@ static getifaddrs_t _orig_getifaddrs = NULL;
 
 static int $getifaddrs(struct ifaddrs **ifap) {
 	int rc = _orig_getifaddrs(ifap);
-	if (rc != 0 || ifap == NULL) return rc;
+	if (rc != 0 || ifap == NULL || *ifap == NULL) return rc;
 
-	// Walk the list and HIDE every interface whose name starts with a
-	// blacklisted prefix. We cannot free() the node because the buffer
-	// was allocated by Apple's allocator (not necessarily the same
-	// malloc_zone as the user process), and freeing it triggers a
-	// zone-allocator panic on iOS 18.6.2.
-	//
-	// Instead we use the well-documented "set name to NULL" trick: man
-	// getifaddrs(3) on Darwin states that callers MUST skip entries with
-	// ifa_name == NULL (because they would otherwise interpret the
-	// pointer as a C string). This is exactly the semantics we want and
-	// it costs us zero allocations.
-	struct ifaddrs *cur = *ifap;
+	struct ifaddrs *head = *ifap;
+	struct ifaddrs *prev = NULL;
+	struct ifaddrs *cur = head;
+
 	while (cur != NULL) {
-		if (cur->ifa_name != NULL &&
-		    [UHConfig shouldHideInterfaceName:cur->ifa_name]) {
-			cur->ifa_name = NULL;
-			cur->ifa_flags = 0;
-			if (cur->ifa_addr != NULL) {
-				cur->ifa_addr->sa_family = AF_UNSPEC;
+		if (cur->ifa_name != NULL && [UHConfig shouldHideInterfaceName:cur->ifa_name]) {
+			if (prev == NULL) {
+				head = cur->ifa_next;
+			} else {
+				prev->ifa_next = cur->ifa_next;
 			}
-			if (cur->ifa_netmask != NULL) {
-				cur->ifa_netmask->sa_family = AF_UNSPEC;
-			}
-			if (cur->ifa_dstaddr != NULL) {
-				cur->ifa_dstaddr->sa_family = AF_UNSPEC;
-			}
+			cur = cur->ifa_next;
+			continue;
 		}
+		prev = cur;
 		cur = cur->ifa_next;
 	}
+	*ifap = head;
 	return 0;
 }
 
