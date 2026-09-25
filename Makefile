@@ -64,11 +64,7 @@ UltraHidePro_FILES = Tweak.x \
 
 include $(THEOS)/makefiles/tweak.mk
 
-internal-package::
-	mkdir -p $(THEOS_STAGING_DIR)/DEBIAN
-	cp control $(THEOS_STAGING_DIR)/DEBIAN/control
-	mkdir -p $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries
-	cp entry.plist $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries/UltraHidePro.plist 2>/dev/null || true
+after-stage::
 	mkdir -p $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro
-	cp Resources/config.plist $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro/config.plist || true
-	cp Resources/vectors.json $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro/vectors.json || true
+	cp -f Resources/config.plist $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro/config.plist 2>/dev/null || true
+	cp -f Resources/vectors.json $(THEOS_STAGING_DIR)/var/jb/Library/UltraHidePro/vectors.json 2>/dev/null || true

@@ -2,11 +2,10 @@ Package: com.ultrahidepro.tweak
 Name: UltraHide Pro
 Version: 1.0.0
 Architecture: iphoneos-arm64
-Depends: firmware (>= 15.0), elllekit, mobilesubstrate
+Depends: firmware (>= 15.0), ellekit (>= 1.0) | mobilesubstrate
 Description: UltraHide Pro — Pro-grade jailbreak-detection bypass for Dopamine 3.0.9 + iOS 18.6.2. Hooks 75+ detection vectors across user-mode (filesystem/dyld/sandbox/AMFI/process/network/MobileGestalt) and kernel-mode (libjailbreak kcall patches). Includes per-app profile, dynamic rule loader, anti-anti-hook, and runtime-protection (BRK/PAC/prologue integrity spoof).
 Maintainer: UltraHide Pro Team <ultrahidepro@example.local>
 Author: UltraHide Pro Team
 Section: Tweaks
 Homepage: https://example.local/ultrahidepro
 Tag: role::end-user
-Icon: file:///var/jb/Library/UltraHidePro/icon.png
