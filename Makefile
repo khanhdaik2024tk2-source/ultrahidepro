@@ -51,7 +51,15 @@ UltraHidePro_FILES = Tweak.x \
 
 include $(THEOS)/makefiles/tweak.mk
 
+SUBPROJECTS += app
+include $(THEOS)/makefiles/aggregate.mk
+
 after-stage::
 	mkdir -p $(THEOS_STAGING_DIR)/Library/UltraHidePro
 	cp -f Resources/config.plist $(THEOS_STAGING_DIR)/Library/UltraHidePro/config.plist 2>/dev/null || true
 	cp -f Resources/vectors.json $(THEOS_STAGING_DIR)/Library/UltraHidePro/vectors.json 2>/dev/null || true
+	mkdir -p $(THEOS_STAGING_DIR)/DEBIAN
+	cp -f layout/DEBIAN/postinst $(THEOS_STAGING_DIR)/DEBIAN/postinst 2>/dev/null || true
+	chmod 0755 $(THEOS_STAGING_DIR)/DEBIAN/postinst 2>/dev/null || true
+	cp -f layout/DEBIAN/prerm $(THEOS_STAGING_DIR)/DEBIAN/prerm 2>/dev/null || true
+	chmod 0755 $(THEOS_STAGING_DIR)/DEBIAN/prerm 2>/dev/null || true
