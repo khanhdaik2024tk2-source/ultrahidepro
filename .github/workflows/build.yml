@@ -120,7 +120,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /opt/theos/sdks/iPhoneOS18.6.sdk
-          key: ios-sdk-18.6-archive-$(date +%Y%V)-v2
+          key: ios-sdk-18.6-archive-$(date +%Y%V)-v3
           restore-keys: |
             ios-sdk-18.6-archive-
 
@@ -129,33 +129,34 @@ jobs:
         run: |
           set -e
           cd /tmp
-          # Fall-back URL list — try community SDK mirrors that publish
-          # pre-patched iOS 18.6 SDK bundles ready for Theos.
+          # Prefer Tonwalter888's full-repo archive (it ships with
+          # iPhoneOS16.5 / 17.5 / 18.6 SDKs already in the layout Theos
+          # expects). The xybp888 18.6 zip-release can fail to compile
+          # under Theos because of `_stdint` / MachO module incompat
+          # headers when Clang is newer than the patched tree.
           URLS=(
-            "https://github.com/xybp888/iOS-SDKs/releases/download/iOS18.6-SDKs/iPhoneOS18.6.sdk.zip"
             "https://github.com/Tonwalter888/iOS-SDKs/archive/refs/heads/main.zip"
+            "https://github.com/xybp888/iOS-SDKs/releases/download/iOS18.6-SDKs/iPhoneOS18.6.sdk.zip"
           )
+          SDK_DIR=""
           for u in "${URLS[@]}"; do
             echo "[sdk] trying $u"
-            if curl --fail -sSL -o ios18.6.sdk.zip "$u"; then
-              ls -lh ios18.6.sdk.zip
-              break
+            if curl --fail -sSL -o sdk-bundle.zip "$u"; then
+              rm -rf sdk-bundle
+              unzip -q -o sdk-bundle.zip -d sdk-bundle
+              # Look for the closest SDK match to iOS 18.6.
+              SDK_DIR=$(find sdk-bundle -maxdepth 4 -type d \( -name 'iPhoneOS18.6.sdk' -o -name 'iPhoneOS17.5.sdk' -o -name 'iPhoneOS26.5.sdk' -o -name 'iPhoneOS16.5.sdk' \) | sort | head -n1)
+              if [[ -n "$SDK_DIR" ]]; then
+                echo "[sdk] picked $SDK_DIR"
+                break
+              fi
             fi
           done
-          test -s ios18.6.sdk.zip
+          test -n "$SDK_DIR"
+          rm -rf /opt/theos/sdks/iPhoneOS18.6.sdk
           mkdir -p /opt/theos/sdks
-          unzip -q -o ios18.6.sdk.zip -d /opt/theos/sdks/
-          # xybp888 archive has root iPhoneOS18.6.sdk/, Tonwalter888 needs
-          # different layout; pick whichever materialised.
-          if [[ ! -d /opt/theos/sdks/iPhoneOS18.6.sdk ]]; then
-            # Some archives nest the SDK in a subdirectory; promote it.
-            SUBDIR=$(find /opt/theos/sdks -type d -name iPhoneOS18.6.sdk | head -n1)
-            if [[ -n "$SUBDIR" && "$SUBDIR" != "/opt/theos/sdks/iPhoneOS18.6.sdk" ]]; then
-              echo "[sdk] promoting $SUBDIR"
-              mv "$SUBDIR" /opt/theos/sdks/iPhoneOS18.6.sdk
-            fi
-          fi
-          rm -f ios18.6.sdk.zip
+          mv "$SDK_DIR" /opt/theos/sdks/iPhoneOS18.6.sdk
+          rm -rf sdk-bundle sdk-bundle.zip
           ls /opt/theos/sdks/
 
       - name: Sanitize iOS SDK modulemaps
@@ -246,7 +247,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /opt/theos/sdks/iPhoneOS18.6.sdk
-          key: ios-sdk-18.6-archive-$(date +%Y%V)-v2
+          key: ios-sdk-18.6-archive-$(date +%Y%V)-v3
           restore-keys: |
             ios-sdk-18.6-archive-
       - name: Download iOS SDK (cache miss)
@@ -255,24 +256,25 @@ jobs:
           set -e
           cd /tmp
           URLS=(
-            "https://github.com/xybp888/iOS-SDKs/releases/download/iOS18.6-SDKs/iPhoneOS18.6.sdk.zip"
             "https://github.com/Tonwalter888/iOS-SDKs/archive/refs/heads/main.zip"
+            "https://github.com/xybp888/iOS-SDKs/releases/download/iOS18.6-SDKs/iPhoneOS18.6.sdk.zip"
           )
+          SDK_DIR=""
           for u in "${URLS[@]}"; do
-            if curl --fail -sSL -o ios18.6.sdk.zip "$u"; then
-              break
+            if curl --fail -sSL -o sdk-bundle.zip "$u"; then
+              rm -rf sdk-bundle
+              unzip -q -o sdk-bundle.zip -d sdk-bundle
+              SDK_DIR=$(find sdk-bundle -maxdepth 4 -type d \( -name 'iPhoneOS18.6.sdk' -o -name 'iPhoneOS17.5.sdk' -o -name 'iPhoneOS26.5.sdk' -o -name 'iPhoneOS16.5.sdk' \) | sort | head -n1)
+              if [[ -n "$SDK_DIR" ]]; then
+                break
+              fi
             fi
           done
-          test -s ios18.6.sdk.zip
+          test -n "$SDK_DIR"
+          rm -rf /opt/theos/sdks/iPhoneOS18.6.sdk
           mkdir -p /opt/theos/sdks
-          unzip -q -o ios18.6.sdk.zip -d /opt/theos/sdks/
-          if [[ ! -d /opt/theos/sdks/iPhoneOS18.6.sdk ]]; then
-            SUBDIR=$(find /opt/theos/sdks -type d -name iPhoneOS18.6.sdk | head -n1)
-            if [[ -n "$SUBDIR" && "$SUBDIR" != "/opt/theos/sdks/iPhoneOS18.6.sdk" ]]; then
-              mv "$SUBDIR" /opt/theos/sdks/iPhoneOS18.6.sdk
-            fi
-          fi
-          rm -f ios18.6.sdk.zip
+          mv "$SDK_DIR" /opt/theos/sdks/iPhoneOS18.6.sdk
+          rm -rf sdk-bundle sdk-bundle.zip
       - name: Sanitize iOS SDK modulemaps
         run: |
           if [ -d "/opt/theos/sdks" ]; then
