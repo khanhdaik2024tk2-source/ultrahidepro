@@ -11,6 +11,7 @@ FINALPACKAGE = 1
 # by .github/workflows/build.yml; off by default because it's slow.
 ifeq ($(analyze),1)
 UltraHidePro_CFLAGS = -fobjc-arc \
+                      -fno-modules \
                       -I$(THEOS_PROJECT_DIR)/Sources \
                       -Wno-deprecated-declarations \
                       -Wno-unused-parameter \
@@ -19,6 +20,7 @@ UltraHidePro_CFLAGS = -fobjc-arc \
                       -Wall
 else
 UltraHidePro_CFLAGS = -fobjc-arc \
+                      -fno-modules \
                       -I$(THEOS_PROJECT_DIR)/Sources \
                       -Wno-deprecated-declarations \
                       -Wno-unused-parameter

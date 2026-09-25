@@ -155,8 +155,14 @@ jobs:
               mv "$SUBDIR" /opt/theos/sdks/iPhoneOS18.6.sdk
             fi
           fi
-          rm ios18.6.sdk.zip
+          rm -f ios18.6.sdk.zip
           ls /opt/theos/sdks/
+
+      - name: Sanitize iOS SDK modulemaps
+        run: |
+          if [ -d "/opt/theos/sdks" ]; then
+            find /opt/theos/sdks -name "*.modulemap" -exec sed -i '' '/found_incompatible_headers__check_search_paths/d' {} + || true
+          fi
 
       - name: Validate sources
         run: |
@@ -267,6 +273,11 @@ jobs:
             fi
           fi
           rm -f ios18.6.sdk.zip
+      - name: Sanitize iOS SDK modulemaps
+        run: |
+          if [ -d "/opt/theos/sdks" ]; then
+            find /opt/theos/sdks -name "*.modulemap" -exec sed -i '' '/found_incompatible_headers__check_search_paths/d' {} + || true
+          fi
       - name: Static analysis
         run: |
           set +e
