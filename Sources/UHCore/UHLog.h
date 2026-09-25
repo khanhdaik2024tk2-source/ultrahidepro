@@ -42,6 +42,11 @@ UH_EXPORT
 #define UHLogWarnF(fmt, ...)  do { if ([UHLog isEnabled:UHLogLevelWarn])  [UHLog warn:fmt, ##__VA_ARGS__]; } while (0)
 #define UHLogErrorF(fmt, ...) do { if ([UHLog isEnabled:UHLogLevelError]) [UHLog error:fmt, ##__VA_ARGS__]; } while (0)
 
+#define UHLogDebug(fmt, ...)  UHLogDebugF(fmt, ##__VA_ARGS__)
+#define UHLogInfo(fmt, ...)   UHLogInfoF(fmt, ##__VA_ARGS__)
+#define UHLogWarn(fmt, ...)   UHLogWarnF(fmt, ##__VA_ARGS__)
+#define UHLogError(fmt, ...)  UHLogErrorF(fmt, ##__VA_ARGS__)
+
 NS_ASSUME_NONNULL_END
 
 #endif // UH_LOG_H
