@@ -169,6 +169,11 @@ jobs:
       - name: Build
         run: |
           set -e
+          # Ensure Theos / GNU make are on PATH inside this shell.
+          # `internal-package-check` runs `dm.pl` via __executable(), which
+          # looks it up in $PATH. /opt/theos/bin must be on PATH here.
+          export PATH="/opt/theos/bin:/opt/homebrew/opt/make/libexec/gnubin:$PATH"
+          export THEOS=/opt/theos
           bash scripts/test_app.sh
 
       - name: Smoke inspect
