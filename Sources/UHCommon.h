@@ -11,6 +11,41 @@
 #import <stdint.h>
 #import <stdbool.h>
 #import <stddef.h>
+#import <mach/mach.h>
+#import <mach/vm_map.h>
+
+#ifndef MACH_VM_H_SHIM
+#define MACH_VM_H_SHIM
+typedef uint64_t mach_vm_address_t;
+typedef uint64_t mach_vm_size_t;
+typedef uint64_t mach_vm_offset_t;
+
+extern kern_return_t mach_vm_region(
+    vm_map_t target_task,
+    mach_vm_address_t *address,
+    mach_vm_size_t *size,
+    vm_region_flavor_t flavor,
+    vm_region_info_t info,
+    mach_msg_type_number_t *infoCnt,
+    mach_port_t *object_name
+);
+
+extern kern_return_t mach_vm_read_overwrite(
+    vm_map_t target_task,
+    mach_vm_address_t address,
+    mach_vm_size_t size,
+    mach_vm_address_t data,
+    mach_vm_size_t *outsize
+);
+
+extern kern_return_t mach_vm_read(
+    vm_map_t target_task,
+    mach_vm_address_t address,
+    mach_vm_size_t size,
+    vm_offset_t *data,
+    mach_msg_type_number_t *dataCnt
+);
+#endif
 
 // ElleKit re-implements the substrate public API.
 #import <substrate.h>

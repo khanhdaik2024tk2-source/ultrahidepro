@@ -8,7 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import <mach/mach.h>
-#import <mach/mach_vm.h>
+#import <mach-o/dyld.h>
 #import <mach/vm_map.h>
 #import <sys/sysctl.h>
 #import <pthread.h>
