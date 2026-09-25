@@ -1,7 +1,21 @@
 #!/bin/sh
-if [ -x /var/jb/usr/bin/uicache ]; then
-    /var/jb/usr/bin/uicache -p /var/jb/Applications/UltraHidePro.app
-elif which uicache >/dev/null 2>&1; then
-    uicache -p /var/jb/Applications/UltraHidePro.app
+set -e
+
+APP_PATH="/var/jb/Applications/UltraHidePro.app"
+
+if [ -d "$APP_PATH" ]; then
+    chmod -R 0755 "$APP_PATH" 2>/dev/null || true
+    if [ -f "$APP_PATH/Info.plist" ]; then
+        chmod 0644 "$APP_PATH/Info.plist" 2>/dev/null || true
+    fi
+
+    if [ -x /var/jb/usr/bin/uicache ]; then
+        /var/jb/usr/bin/uicache -p "$APP_PATH" 2>/dev/null || true
+        /var/jb/usr/bin/uicache -a 2>/dev/null || true
+    elif which uicache >/dev/null 2>&1; then
+        uicache -p "$APP_PATH" 2>/dev/null || true
+        uicache -a 2>/dev/null || true
+    fi
 fi
+
 exit 0

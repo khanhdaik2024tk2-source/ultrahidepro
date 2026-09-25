@@ -44,6 +44,8 @@ PLIST_FILES = [
     "entry.plist",
     "Resources/config.plist",
     "Resources/entitlements.plist",
+    "app/Info.plist",
+    "app/entitlements.plist",
 ]
 
 JSON_FILES = [

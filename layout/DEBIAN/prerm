@@ -1,7 +1,12 @@
 #!/bin/sh
+APP_PATH="/var/jb/Applications/UltraHidePro.app"
+
 if [ -x /var/jb/usr/bin/uicache ]; then
-    /var/jb/usr/bin/uicache -u /var/jb/Applications/UltraHidePro.app
+    /var/jb/usr/bin/uicache -u "$APP_PATH" 2>/dev/null || true
+    /var/jb/usr/bin/uicache -a 2>/dev/null || true
 elif which uicache >/dev/null 2>&1; then
-    uicache -u /var/jb/Applications/UltraHidePro.app
+    uicache -u "$APP_PATH" 2>/dev/null || true
+    uicache -a 2>/dev/null || true
 fi
+
 exit 0

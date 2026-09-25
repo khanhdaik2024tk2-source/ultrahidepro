@@ -6,5 +6,11 @@
 	<true/>
 	<key>platform-application</key>
 	<true/>
+	<key>get-task-allow</key>
+	<true/>
+	<key>com.apple.private.security.storage.AppBundles</key>
+	<true/>
+	<key>com.apple.private.security.storage.AppDataContainers</key>
+	<true/>
 </dict>
 </plist>

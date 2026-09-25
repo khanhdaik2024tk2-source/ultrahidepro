@@ -26,6 +26,13 @@ echo "[+] Built $DEB_FILE"
 echo "[+] Inspecting deb contents"
 dpkg-deb -c "$DEB_FILE"
 
+echo "[+] Verifying Info.plist inside UltraHidePro.app"
+if ! dpkg-deb -c "$DEB_FILE" | grep -q "UltraHidePro.app/Info.plist"; then
+  echo "[!] ERROR: Info.plist is MISSING from UltraHidePro.app!"
+  exit 1
+fi
+echo "[+] Found Info.plist in UltraHidePro.app"
+
 echo "[+] Extracting dylib for smoke test"
 mkdir -p "$BUILD_DIR"
 dpkg-deb -x "$DEB_FILE" "$BUILD_DIR/installed"
